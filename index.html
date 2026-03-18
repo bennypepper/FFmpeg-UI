@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg Audio Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+        .drop-zone-over {
+            border-color: #4f46e5;
+            background-color: #e0e7ff;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-white rounded-xl shadow-lg p-8 space-y-6">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-slate-900">FFmpeg Audio Converter</h1>
+            <p class="text-slate-500 mt-2">Drag and drop a file, select your desired audio settings, and convert.</p>
+        </div>
+
+        <!-- Drop Zone -->
+        <div id="dropZone" class="drop-zone rounded-lg p-10 text-center cursor-pointer">
+            <div id="dropZoneText">
+                <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <p class="mt-2 text-lg font-medium text-slate-600">Drag & Drop Your File Here</p>
+                <p class="text-sm text-slate-500">or click to select a file</p>
+                <input type="file" id="fileInput" class="hidden">
+            </div>
+            <div id="fileInfo" class="hidden text-left">
+                <p class="font-semibold text-slate-700">Selected File:</p>
+                <p id="fileName" class="text-indigo-600"></p>
+            </div>
+        </div>
+
+        <!-- Audio Settings -->
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Format Selection -->
+            <div>
+                <label for="format" class="block text-sm font-medium text-slate-700">Target Format</label>
+                <select id="format" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="mp3">MP3</option>
+                    <option value="wav">WAV</option>
+                    <option value="aac">AAC</option>
+                    <option value="flac">FLAC</option>
+                    <option value="ogg">OGG</option>
+                    <option value="m4a">M4A</option>
+                </select>
+            </div>
+
+            <!-- Audio Bitrate -->
+            <div>
+                <label for="bitrate" class="block text-sm font-medium text-slate-700">Audio Bitrate (kbps)</label>
+                <select id="bitrate" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="32">32</option>
+                    <option value="64">64</option>
+                    <option value="96">96</option>
+                    <option value="128" selected>128 (Standard)</option>
+                    <option value="160">160</option>
+                    <option value="192">192 (High Quality)</option>
+                    <option value="256">256</option>
+                    <option value="320">320 (Max Quality)</option>
+                </select>
+            </div>
+
+             <!-- Audio Channels -->
+            <div>
+                <label for="channels" class="block text-sm font-medium text-slate-700">Audio Channels</label>
+                <select id="channels" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="1">Mono</option>
+                    <option value="2" selected>Stereo</option>
+                </select>
+            </div>
+
+            <!-- Sample Rate -->
+            <div>
+                <label for="sampleRate" class="block text-sm font-medium text-slate-700">Sample Rate (Hz)</label>
+                <select id="sampleRate" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="8000">8000</option>
+                    <option value="11025">11025</option>
+                    <option value="16000">16000</option>
+                    <option value="22050">22050</option>
+                    <option value="32000">32000</option>
+                    <option value="44100" selected>44100 (CD Quality)</option>
+                    <option value="48000">48000 (DVD Quality)</option>
+                    <option value="96000">96000 (Studio Quality)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="text-center pt-4">
+            <button id="convertBtn" class="w-full md:w-1/2 bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                Convert File
+            </button>
+        </div>
+
+        <!-- Progress and Log -->
+        <div id="progressSection" class="hidden space-y-4 pt-4">
+             <!-- Status Message -->
+            <div id="statusMessage" class="text-center p-3 rounded-md hidden"></div>
+            
+            <!-- Progress Bar -->
+            <div id="progressBarContainer" class="w-full bg-slate-200 rounded-full hidden">
+                <div id="progressBar" class="bg-indigo-600 text-xs font-medium text-indigo-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
+            </div>
+
+            <!-- Generated Command -->
+             <div>
+                <p class="text-sm font-medium text-slate-700">Generated FFmpeg Command</p>
+                <div class="bg-slate-800 text-slate-100 font-mono p-3 rounded-md text-sm overflow-x-auto">
+                    <code id="ffmpegCommand"></code>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const dropZone = document.getElementById('dropZone');
+        const dropZoneText = document.getElementById('dropZoneText');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileNameEl = document.getElementById('fileName');
+        const convertBtn = document.getElementById('convertBtn');
+        const bitrateSelect = document.getElementById('bitrate');
+        const formatSelect = document.getElementById('format');
+        const channelsSelect = document.getElementById('channels');
+        const sampleRateSelect = document.getElementById('sampleRate');
+        const progressSection = document.getElementById('progressSection');
+        const ffmpegCommand = document.getElementById('ffmpegCommand');
+        const statusMessage = document.getElementById('statusMessage');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+
+        let selectedFile = null;
+        const SERVER_URL = 'http://127.0.0.1:5000/convert';
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drop-zone-over'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drop-zone-over'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone-over');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); });
+        convertBtn.addEventListener('click', () => { if (selectedFile) uploadToServerWithProgress(); });
+
+        // --- Core Functions ---
+        function handleFile(file) {
+            selectedFile = file;
+            fileNameEl.textContent = file.name;
+            dropZoneText.classList.add('hidden');
+            fileInfo.classList.remove('hidden');
+            convertBtn.disabled = false;
+            progressSection.classList.add('hidden');
+            statusMessage.classList.add('hidden');
+        }
+
+        function generateCommand(inputFilename) {
+            const outputFilename = `${inputFilename.split('.').slice(0, -1).join('.')}.${formatSelect.value}`;
+            return `ffmpeg -i "${inputFilename}" -vn -ac ${channelsSelect.value} -ar ${sampleRateSelect.value} -b:a ${bitrateSelect.value}k "${outputFilename}"`;
+        }
+        
+        function setStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.className = `text-center p-3 rounded-md ${isError ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+            statusMessage.classList.remove('hidden');
+        }
+
+        function updateProgressBar(percent) {
+            progressBar.style.width = `${percent}%`;
+            progressBar.textContent = `${percent}%`;
+        }
+
+        function uploadToServerWithProgress() {
+            // 1. Prepare UI for conversion
+            convertBtn.disabled = true;
+            convertBtn.textContent = 'Uploading...';
+            progressSection.classList.remove('hidden');
+            progressBarContainer.classList.remove('hidden');
+            updateProgressBar(0);
+            statusMessage.classList.add('hidden');
+            ffmpegCommand.textContent = generateCommand(selectedFile.name);
+
+            // 2. Create FormData and XMLHttpRequest
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('format', formatSelect.value);
+            formData.append('bitrate', bitrateSelect.value);
+            formData.append('channels', channelsSelect.value);
+            formData.append('sampleRate', sampleRateSelect.value);
+
+            const xhr = new XMLHttpRequest();
+
+            // 3. Listen for upload progress events
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    updateProgressBar(percentComplete);
+                }
+            });
+
+            // 4. Handle completion of the request
+            xhr.onload = () => {
+                updateProgressBar(100);
+                convertBtn.textContent = 'Converting...';
+                if (xhr.status === 200) {
+                    // Success - server sent back the file
+                    const blob = xhr.response;
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = downloadUrl;
+                    const outputFilename = `${selectedFile.name.split('.').slice(0, -1).join('.')}.${formatSelect.value}`;
+                    a.download = outputFilename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    document.body.removeChild(a);
+                    setStatus('Conversion successful! Your download has started.', false);
+                } else {
+                    // Server returned an error
+                    try {
+                        const errorData = JSON.parse(xhr.responseText);
+                        console.error('Server Error:', errorData);
+                        setStatus(`Conversion Failed: ${errorData.details || errorData.error}`, true);
+                    } catch (e) {
+                        setStatus(`Conversion Failed with status: ${xhr.status}`, true);
+                    }
+                }
+                // Reset button after operation
+                convertBtn.disabled = false;
+                convertBtn.textContent = 'Convert File';
+            };
+            
+            // 5. Handle network errors
+            xhr.onerror = () => {
+                console.error('Network Error:', xhr.statusText);
+                setStatus('Error: Could not connect to the conversion server. Is it running?', true);
+                convertBtn.disabled = false;
+                convertBtn.textContent = 'Convert File';
+            };
+
+            // 6. Configure and send the request
+            xhr.open('POST', SERVER_URL, true);
+            xhr.responseType = 'blob'; // We expect a file back
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
