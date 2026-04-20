@@ -544,39 +544,77 @@ def merge_probe():
 
 @app.route('/convert', methods=['POST'])
 def convert():
-    params     = dict(request.form)
-    params     = {k: (v[0] if isinstance(v, list) else v) for k, v in params.items()}
-    mode       = _g(params, 'mode', 'convert')
-    fmt        = _g(params, 'output_format', 'mp4')
-    stored     = _g(params, 'stored_name')
-    orig_name  = _g(params, 'original_name', stored)
-    input_path = UPLOAD_DIR / stored
-    if not input_path.exists():
-        return jsonify({'error': 'Input file not found'}), 404
+    if request.is_json:
+        data = request.get_json()
+        mode       = data.get('mode', 'convert')
+        fmt        = data.get('fmt', 'mp4')
+        raw_input  = data.get('input_path', '')
+        input_path = UPLOAD_DIR / raw_input if raw_input else None
+        args       = data.get('args', [])
+        orig_name  = data.get('original_name', raw_input)
+        
+        if not input_path or not input_path.exists():
+            return jsonify({'error': 'Input file not found'}), 404
 
-    job_id   = uuid.uuid4().hex
-    out_name = f'{job_id}_{Path(orig_name).stem}.{fmt}'
-    out_path = OUTPUT_DIR / out_name
+        job_id   = uuid.uuid4().hex
+        out_name = f'{job_id}_{input_path.stem}.{fmt}'
+        out_path = OUTPUT_DIR / out_name
+        
+        probe  = _probe(input_path)
+        dur    = probe.get('duration', 0) if probe else 0
+        
+        # Override output file in args to be the out_path
+        # The frontend builder usually puts the input and output in args
+        # But we need to ensure the output path is correct.
+        try:
+            if '-i' in args:
+                idx = args.index('-i')
+                args[idx + 1] = str(input_path)
+        except ValueError:
+            pass
 
-    probe  = _probe(input_path)
-    dur    = probe.get('duration', 0) if probe else 0
-    params['duration'] = str(dur)
+        if args:
+            args[-1] = str(out_path)
+        else:
+            return jsonify({'error': 'No args provided'}), 400
+            
+        cmd = ['ffmpeg'] + args
 
-    # 2-pass first pass (blocking)
-    tsz = _g(params, 'target_size_mb', '').strip()
-    if tsz and dur > 0:
-        bits  = float(tsz) * 8 * 1_048_576
-        br_k  = int(bits / dur / 1000)
-        vc    = _g(params, 'codec_video', 'libx264')
-        null  = 'NUL' if os.name == 'nt' else '/dev/null'
-        p1cmd = ['ffmpeg', '-y', '-i', str(input_path), '-c:v', vc,
-                 '-b:v', f'{br_k}k', '-pass', '1', '-an', '-f', 'null', null]
-        subprocess.run(p1cmd, capture_output=True, **_popen_kwargs())
+    else:
+        params     = dict(request.form)
+        params     = {k: (v[0] if isinstance(v, list) else v) for k, v in params.items()}
+        mode       = _g(params, 'mode', 'convert')
+        fmt        = _g(params, 'output_format', 'mp4')
+        stored     = _g(params, 'stored_name')
+        orig_name  = _g(params, 'original_name', stored)
+        input_path = UPLOAD_DIR / stored
+        
+        if not input_path.exists():
+            return jsonify({'error': 'Input file not found'}), 404
 
-    try:
-        cmd = build_command(str(input_path), str(out_path), params, mode, fmt)
-    except Exception as e:
-        return jsonify({'error': f'Build failed: {e}'}), 400
+        job_id   = uuid.uuid4().hex
+        out_name = f'{job_id}_{Path(orig_name).stem}.{fmt}'
+        out_path = OUTPUT_DIR / out_name
+
+        probe  = _probe(input_path)
+        dur    = probe.get('duration', 0) if probe else 0
+        params['duration'] = str(dur)
+
+        # 2-pass first pass (blocking)
+        tsz = _g(params, 'target_size_mb', '').strip()
+        if tsz and dur > 0:
+            bits  = float(tsz) * 8 * 1_048_576
+            br_k  = int(bits / dur / 1000)
+            vc    = _g(params, 'codec_video', 'libx264')
+            null  = 'NUL' if os.name == 'nt' else '/dev/null'
+            p1cmd = ['ffmpeg', '-y', '-i', str(input_path), '-c:v', vc,
+                     '-b:v', f'{br_k}k', '-pass', '1', '-an', '-f', 'null', null]
+            subprocess.run(p1cmd, capture_output=True, **_popen_kwargs())
+
+        try:
+            cmd = build_command(str(input_path), str(out_path), params, mode, fmt)
+        except Exception as e:
+            return jsonify({'error': f'Build failed: {e}'}), 400
 
     cmd_display = ' '.join(cmd) if cmd[0] != '__gif__' else f'ffmpeg [2-pass GIF] → {out_name}'
     with _jobs_lock:
