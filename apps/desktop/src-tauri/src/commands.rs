@@ -236,3 +236,13 @@ pub fn cancel_job(_job_id: String) -> Result<(), String> {
     // detect that the child exited and stop naturally.
     Ok(())
 }
+
+// ─────────────────────────────────────────────
+// download_ffmpeg — grabs pre-compiled binaries via sidecar
+// ─────────────────────────────────────────────
+#[tauri::command]
+pub async fn download_ffmpeg() -> Result<String, String> {
+    ffmpeg_sidecar::download::auto_download()
+        .map_err(|e| format!("Failed to download FFmpeg: {}", e))?;
+    Ok("Embedded FFmpeg downloaded successfully".to_string())
+}
