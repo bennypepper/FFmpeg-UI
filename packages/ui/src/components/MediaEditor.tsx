@@ -67,13 +67,19 @@ export function MediaEditor(props: MediaEditorProps) {
           <div className="segment-group">
             <button 
               className={`seg-btn ${activeMode === 'video' ? 'active' : ''}`}
-              onClick={() => setActiveMode('video')}
+              onClick={() => {
+                setActiveMode('video');
+                handleUpdate({ mode: 'convert' });
+              }}
             >
               <Film size={14} style={{marginRight: 6}} /> Video
             </button>
             <button 
               className={`seg-btn ${activeMode === 'audio' ? 'active' : ''}`}
-              onClick={() => setActiveMode('audio')}
+              onClick={() => {
+                setActiveMode('audio');
+                handleUpdate({ mode: 'audio' });
+              }}
             >
               <Music size={14} style={{marginRight: 6}} /> Audio
             </button>
@@ -91,7 +97,15 @@ export function MediaEditor(props: MediaEditorProps) {
               Install FFmpeg
             </button>
           )}
-          <button className="btn btn-ghost" title="Toggle theme" style={{ padding: '6px' }}>
+          <button 
+            className="btn btn-ghost" 
+            title="Toggle theme" 
+            style={{ padding: '6px' }}
+            onClick={() => {
+              const current = document.documentElement.getAttribute('data-theme') || 'dark';
+              document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+            }}
+          >
             <Sun size={16} />
           </button>
         </div>
@@ -180,13 +194,22 @@ export function MediaEditor(props: MediaEditorProps) {
 
       {/* ── Sub Mode Bar ── */}
       <div className="mode-bar">
-        <button className={`mode-btn ${subMode === 'remux' ? 'active' : ''}`} onClick={() => setSubMode('remux')}>
+        <button 
+          className={`mode-btn ${options.mode === 'remux' ? 'active' : ''}`} 
+          onClick={() => handleUpdate({ mode: 'remux' })}
+        >
           <Package size={14} /> Remux
         </button>
-        <button className={`mode-btn ${subMode === 'thumbnail' ? 'active' : ''}`} onClick={() => setSubMode('thumbnail')}>
+        <button 
+          className={`mode-btn ${options.mode === 'thumbnail' ? 'active' : ''}`} 
+          onClick={() => handleUpdate({ mode: 'thumbnail' })}
+        >
           <ImageIcon size={14} /> Thumbnail
         </button>
-        <button className={`mode-btn ${subMode === 'merge' ? 'active' : ''}`} onClick={() => setSubMode('merge')}>
+        <button 
+          className={`mode-btn ${options.mode === 'merge' ? 'active' : ''}`} 
+          onClick={() => handleUpdate({ mode: 'merge' })}
+        >
           <Layers size={14} /> Merge
         </button>
       </div>
