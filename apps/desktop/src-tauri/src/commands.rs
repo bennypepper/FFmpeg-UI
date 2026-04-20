@@ -105,10 +105,7 @@ pub fn probe_file(path: String) -> Result<String, String> {
 // progress + log events back to the frontend.
 // ─────────────────────────────────────────────
 #[tauri::command]
-pub async fn start_convert(
-    app: AppHandle,
-    params: ConvertParams,
-) -> Result<String, String> {
+pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<String, String> {
     use ffmpeg_sidecar::command::FfmpegCommand;
     use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 
@@ -214,10 +211,7 @@ pub async fn start_convert(
                     LogPayload {
                         job_id: job_id_clone.clone(),
                         level: "done".into(),
-                        message: format!(
-                            "✅ Encode complete → {}",
-                            params.output_path
-                        ),
+                        message: format!("✅ Encode complete → {}", params.output_path),
                     },
                 );
                 break;

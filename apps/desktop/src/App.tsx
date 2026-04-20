@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { Button, Dropzone, Select, Slider, TerminalOutput } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs, CommandOptions } from '@ffmpeg-ui/core';
 
@@ -36,6 +37,7 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [filePath, setFilePath] = useState<string | null>(null);       // native FS path
   const [fileName, setFileName] = useState<string>('');
+  const [mediaInfo, setMediaInfo] = useState<any>(null);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,7 +113,7 @@ export default function App() {
     setTerminalLogs(prev => [...prev.slice(-199), msg]); // keep last 200 lines
   };
 
-  const handleFileDrop = (selectedFile: File) => {
+  const handleFileDrop = async (selectedFile: File) => {
     // Browsers give us a File object; we need the real FS path for Tauri.
     // Cast to the Tauri-augmented File type which exposes .path
     const nativePath = (selectedFile as any).path as string | undefined;
@@ -119,16 +121,41 @@ export default function App() {
       setFilePath(nativePath);
       setFileName(selectedFile.name);
       addLog(`[Loaded] ${nativePath}`);
+      await fetchMediaInfo(nativePath);
     } else {
       addLog('[Warning] Could not read native file path — try using the "Open File" button instead.');
     }
   };
 
-  // TODO (Phase 3): Install @tauri-apps/plugin-dialog and wire up native open dialog.
-  // For now, file selection is handled exclusively by the Dropzone component.
+  const fetchMediaInfo = async (path: string) => {
+    try {
+      const probeJsonStr = await invoke<string>('probe_file', { path });
+      const info = JSON.parse(probeJsonStr);
+      setMediaInfo(info.format || {});
+      addLog(`[Media Info] Duration: ${parseFloat(info.format?.duration || '0').toFixed(2)}s | Format: ${info.format?.format_name}`);
+    } catch (err) {
+      addLog(`[Warning] ffprobe failed: ${err}`);
+      setMediaInfo(null);
+    }
+  };
+
   const handleOpenDialog = async () => {
-    addLog('[Info] Native file dialog will be available in the next phase (tauri-plugin-dialog).');
-    addLog('[Info] For now, please drag-and-drop your file onto the Dropzone.');
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: 'Media', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'mp3', 'aac', 'wav', 'flac', 'm4a'] }],
+      });
+      if (typeof selected === 'string') {
+        const sep = selected.includes('/') ? '/' : '\\';
+        const parts = selected.split(sep);
+        setFilePath(selected);
+        setFileName(parts[parts.length - 1]);
+        addLog(`[Loaded] ${selected}`);
+        await fetchMediaInfo(selected);
+      }
+    } catch (err) {
+      addLog(`[Error] File dialog error: ${err}`);
+    }
   };
 
   const handleUpdate = (key: keyof CommandOptions, value: string) => {
@@ -149,20 +176,33 @@ export default function App() {
     const rawName = parts[parts.length - 1];
     const nameNoExt = rawName.replace(/\.[^.]+$/, '');
     parts[parts.length - 1] = `${nameNoExt}_converted.${options.fmt}`;
-    const outputPath = parts.join(sep);
+    const defaultOutputPath = parts.join(sep);
+
+    // Prompt user to select an output location
+    const selectedSavePath = await save({
+      defaultPath: defaultOutputPath,
+      filters: [{ name: 'Media', extensions: [options.fmt] }],
+    });
+
+    if (!selectedSavePath) {
+      // User cancelled the save dialog
+      setIsProcessing(false);
+      currentJobId.current = null;
+      return;
+    }
 
     // Build the FFmpeg argument list from core
     const ffmpegArgs = buildFFmpegArgs({ ...options, input: filePath });
 
     addLog(`[Job: ${jobId}] Invoking Rust backend…`);
-    addLog(`[Command] ffmpeg -i "${filePath}" ${ffmpegArgs.join(' ')} "${outputPath}" -y`);
+    addLog(`[Command] ffmpeg -i "${filePath}" ${ffmpegArgs.join(' ')} "${selectedSavePath}" -y`);
 
     try {
       await invoke('start_convert', {
         params: {
           job_id: jobId,
           input_path: filePath,
-          output_path: outputPath,
+          output_path: selectedSavePath,
           args: ffmpegArgs,
         },
       });
@@ -218,15 +258,24 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Encoding Settings</h3>
               <button
-                onClick={() => { setFilePath(null); setFileName(''); setTerminalLogs([]); }}
+                onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.1rem' }}
                 title="Clear file"
               >✕</button>
             </div>
 
-            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.6, wordBreak: 'break-all' }}>
-              📁 {fileName}
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8, wordBreak: 'break-all' }}>
+                📁 {fileName}
+              </p>
+              {mediaInfo && (
+                <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.5 }}>
+                  {Math.round(parseInt(mediaInfo.size, 10) / 1024 / 1024)} MB
+                  {mediaInfo.duration ? ` · ${parseFloat(mediaInfo.duration).toFixed(1)}s` : ''}
+                  {mediaInfo.bit_rate ? ` · ${Math.round(parseInt(mediaInfo.bit_rate, 10) / 1000)} kbps` : ''}
+                </p>
+              )}
+            </div>
 
             <Select
               label="Processing Mode"
@@ -328,7 +377,7 @@ export default function App() {
                 </Button>
               ) : (
                 <>
-                  <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setTerminalLogs([]); }}>
+                  <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); }}>
                     Clear
                   </Button>
                   <Button
