@@ -1,47 +1,47 @@
 # FFmpeg Web UI Converter 
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![Flask](https://img.shields.io/badge/Flask-2.0+-lightgrey.svg) ![FFmpeg](https://img.shields.io/badge/FFmpeg-Ready-green.svg) ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Enabled-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![Flask](https://img.shields.io/badge/Flask-2.0+-lightgrey.svg) ![FFmpeg](https://img.shields.io/badge/FFmpeg-Ready-green.svg) ![LocalFirst](https://img.shields.io/badge/LocalFirst-Enabled-blue.svg)
 
-A simple, self-hosted web interface for FFmpeg that allows you to convert audio files by dragging and dropping them directly into your browser. This project provides a user-friendly GUI to control common audio conversion settings without needing to use the command line directly.
+A minimalist, self-hosted web interface for FFmpeg that allows you to manage advanced video and audio encoding completely offline. Process your multimedia files securely in your local browser without ever uploading anything to a cloud server. 
 
 ## 📌 Project Overview
-This tool bridges the gap between the powerful FFmpeg command-line utility and everyday users. It features an interactive frontend that communicates with a lightweight Python Flask backend. The server executes FFmpeg via Python's `subprocess` module, processes the audio locally for maximum privacy and speed, and returns the converted file. 
+This tool bridges the gap between the powerful FFmpeg command-line utility and everyday users. It features an ultra-clean frontend that communicates with a lightweight Python Flask backend. The server executes FFmpeg locally via Python's `subprocess` module to process your files securely, rapidly, and privately.
 
 ## 🛠️ Tech Stack & Tools
-* **Frontend:** HTML5, JavaScript, Tailwind CSS
-* **Backend:** Python, Flask, Flask-CORS
-* **Audio Processing:** FFmpeg
-* **Automation:** Windows Batch Scripting (`.bat`)
+* **Frontend:** Vanilla JavaScript, CSS Glassmorphism, Inline SVGs (No external dependencies)
+* **Backend:** Python, Flask, Server-Sent Events (SSE)
+* **Media Engine:** FFmpeg & FFprobe
+* **Automation:** Cross-platform scripts (`.bat` and `.sh`)
 
 ## 🚀 Key Features
-* **Interactive UI:** Drag-and-drop functionality with real-time file upload progress bars.
-* **Full Audio Control:** Granular control over target formats (MP3, WAV, AAC, FLAC, OGG, M4A), bitrates, sample rates, and audio channels.
-* **Automated Environment Setup:** Includes a batch script that automatically requests admin privileges to install Chocolatey, Python, FFmpeg, and required PIP libraries.
-* **Educational:** Dynamically displays the exact FFmpeg command being generated and executed under the hood.
-* **Automated Cleanup:** Safely deletes temporary input and output files from the server immediately after the download is completed.
+* **Dual Processing Modes:** A master toggle provides a bespoke, uncluttered interface for either Video encoding or purely Audio conversion.
+* **Batch Processing Queue:** Drag-and-drop multiple files to build a robust rendering queue with drag-to-reorder prioritization and batch ZIP downloading.
+* **Advanced Video Tooling:** Hardware-accelerated (NVENC/QSV) video encoding, smart remuxing, target-size bitrate targeting, and automated watermark integrations.
+* **Visual Add-ons:** Dedicated tools to extract high-quality Thumbnails or Merge multiple video files natively.
+* **Real-time Diagnostics:** Monitor detailed, live encoding metrics (FPS, ETA, Size) via reliable Server-Sent Events (SSE) tracking real FFmpeg output.
+* **Cross-Platform Installer:** Out-of-the-box automated configuration scripts for Windows, macOS, and Linux users.
 
 ## 📂 Repository Structure
 ```text
 ffmpeg-web-ui/
-├── install_dependencies.bat  # All-in-one Windows installer for required software
-├── start_converter.bat       # One-click script to launch the server and UI
-├── server.py                 # The Python Flask backend that executes FFmpeg
-├── index.html                # The frontend web interface
+├── install_dependencies.*    # Cross-platform installers (Chocolatey/Homebrew/Apt)
+├── start_converter.*         # One-click script to launch the server and UI 
+├── server.py                 # The Python Flask backend that connects to FFmpeg
+├── static/                   # Modularized vanilla JS scripts and modern CSS
+├── index.html                # The minimalist, robust frontend application
 └── README.md
 ```
 
-## 💻 How to Run Locally (Windows)
+## 💻 How to Run Locally
 
-**1. Install Dependencies (First Time Only)**
-Right-click on `install_dependencies.bat` and select **"Run as administrator"**. This script will automatically check for and install Chocolatey, Python, FFmpeg, and the required Flask libraries.
+### Windows
+1. Right-click `install_dependencies.bat` and select **"Run as administrator"**. This installs Python, FFmpeg, and Flask via Chocolatey automatically.
+2. Double-click `start_converter.bat` to launch the server. Your web browser will automatically open the UI.
 
-**2. Launch the Application**
-Double-click `start_converter.bat`. This will automatically:
-* Start the Python Flask server in a new command prompt window.
-* Open the converter interface (`index.html`) in your default web browser.
-
-**3. Convert Audio**
-Drag an audio file into the browser drop-zone, configure your settings, and click "Convert". The file will process locally and download automatically.
+### macOS & Linux
+1. Open up your terminal in this directory.
+2. Run `bash install_dependencies.sh`. This automatically queries your OS package manager (`brew`, `apt`, `dnf`, or `pacman`) to install Python and FFmpeg.
+3. Launch the environment by running `bash start_converter.sh`. 
 
 ## 📝 License
 This project is licensed under the MIT License.
