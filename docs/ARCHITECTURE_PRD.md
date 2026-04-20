@@ -62,20 +62,20 @@ FFmpeg-UI/
 - [x] Scaffolded Vite + React frameworks for `desktop` and `wasm-web`.
 - [x] Scaffolded empty shared libraries `packages/core` and `packages/ui`.
 
-### 🔄 Phase 2: Core Logic Port (Next Up)
-- [ ] Analyze legacy `command-builder.js` and `features.js`.
-- [ ] Re-write the FFmpeg argument generation logic into pure, testable TypeScript inside `packages/core`.
-- [ ] Define global interfaces (`MediaFile`, `EncodingOptions`, `CommandResult`).
+### ✅ Phase 2: Core Logic Port (Completed)
+- [x] Analyze legacy `command-builder.js` and `features.js`.
+- [x] Re-write the FFmpeg argument generation logic into pure, testable TypeScript inside `packages/core`.
+- [x] Define global interfaces (`MediaFile`, `EncodingOptions`, `CommandResult`).
 
-### ⏳ Phase 3: Shared UI Implementation
-- [ ] Initialize CSS/Styling strategy in `packages/ui`.
-- [ ] Build shared React components: File Uploader/Dropper, Format Selectors, Progress Bars, Output Logs, and the central Media Editor.
-- [ ] Ensure the UI consumes the logic from `packages/core`.
+### ✅ Phase 3: Shared UI Implementation (Completed)
+- [x] Initialize CSS/Styling strategy in `packages/ui`.
+- [x] Build shared React components: File Uploader/Dropper, Format Selectors, Progress Bars, Output Logs, and the central Media Editor.
+- [x] Ensure the UI consumes the logic from `packages/core`.
 
-### ⏳ Phase 4: Platform Wiring & App Builds
-- **WASM Web:** Wire up the UI to `@ffmpeg/ffmpeg` to handle in-browser virtual file mapping and execution.
-- **Desktop (Tauri):** Initialize Tauri, bundle standard FFmpeg binaries for Windows/Mac/Linux, map Rust `Command` APIs to the React frontend.
-- **Local Server:** Swap out the Vanilla HTML/JS with a production build of the React UI. Wire up the Python `subprocess` backend.
+### 🔄 Phase 4: Platform Wiring & App Builds (In Progress)
+- [x] **WASM Web:** Wire up the UI to `@ffmpeg/ffmpeg` to handle in-browser virtual file mapping and execution.
+- [x] **Desktop (Tauri):** Initialize Tauri, bundle standard FFmpeg binaries for Windows/Mac/Linux, map Rust `Command` APIs to the React frontend.
+- [ ] **Local Server:** Swap out the Vanilla HTML/JS with a production build of the React UI. Wire up the Python `subprocess` backend.
 
 ### ⏳ Phase 5: Polish & Final Deployment
 - [ ] Unify error handling (dealing with specific WebAssembly memory limits vs. Desktop disk space limits).

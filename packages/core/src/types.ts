@@ -2,7 +2,7 @@ export type ProcessingMode = 'convert' | 'audio' | 'remux' | 'merge' | 'thumbnai
 
 export interface CommandOptions {
   mode: ProcessingMode;
-  input: string; // the input filename or path
+  input?: string; // the input filename or path
   
   // Format & Codec
   fmt: string;

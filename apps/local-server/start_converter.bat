@@ -2,7 +2,7 @@
 title FFmpeg Web UI
 echo.
 echo  ===================================
-echo   FFmpeg Web UI — Starting server
+echo   FFmpeg Web UI - Starting server
 echo  ===================================
 echo.
 
