@@ -61,6 +61,53 @@ export default function App() {
     }
   };
 
+  
+
+  
+  const streamJobProgress = (jobId: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const es = new EventSource(`/progress/${jobId}`);
+      eventSourceRef.current = es;
+
+      es.onmessage = (e) => {
+        const evData = JSON.parse(e.data);
+        if (evData.status === 'started') {
+          setTerminalLogs(prev => [...prev.slice(-199), '[Started] Job ' + jobId]);
+        } else if (evData.status === 'log') {
+           if(evData.message) setTerminalLogs(prev => [...prev.slice(-199), '[FFmpeg] ' + evData.message]);
+        } else if (evData.status === 'running') {
+           setProgress({
+             frame: evData.frame || 0,
+             fps: evData.fps || 0,
+             speed: evData.speed || 1,
+             size_kb: evData.size_mb ? evData.size_mb * 1024 : 0,
+             time_s: evData.eta_sec || 0,
+             bitrate_kbps: 0,
+             progress: evData.progress || 0
+           });
+        } else if (evData.status === 'done') {
+           es.close();
+           const a = document.createElement('a');
+           a.href = `/download/${jobId}`;
+           a.download = '';
+           a.click();
+           currentJobId.current = null;
+           resolve();
+        } else if (evData.status === 'error') {
+           es.close();
+           const errMsg = evData.error || evData.message || 'Unknown error';
+           setTerminalLogs(prev => [...prev.slice(-199), '[Error] ' + errMsg]);
+           reject(new Error(errMsg));
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        reject(new Error('Connection lost'));
+      };
+    });
+  };
+
   const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[]) => {
     if (q.length === 0 || isProcessing) return;
 
@@ -68,73 +115,49 @@ export default function App() {
     setIsDone(false);
 
     try {
-      for (const item of q) {
-        if (!item.path) continue;
-
-        const args = buildFFmpegArgs({ ...opts, input: item.path });
-        setTerminalLogs(prev => [...prev.slice(-199), `[Command] ffmpeg ${args.join(' ')}`]);
-
-        const res = await fetch('/convert', {
+      if (opts.mode === 'merge') {
+        if (q.length < 2) throw new Error("Need at least 2 files to merge.");
+        setTerminalLogs(prev => [...prev.slice(-199), '[Command] ffmpeg [merge inputs...] -> output']);
+        const res = await fetch('/merge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input_path: item.path,
-            mode: opts.mode,
-            fmt: opts.fmt,
-            args: args
+            files: q.map(item => ({ stored_name: item.path })),
+            output_format: opts.fmt,
+            force_reencode: false
           })
         });
-        
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
         const jobId = data.job_id;
         currentJobId.current = jobId;
+        await streamJobProgress(jobId);
+      } else {
+        for (const item of q) {
+          if (!item.path) continue;
 
-        await new Promise<void>((resolve, reject) => {
-          const es = new EventSource(`/progress/${jobId}`);
-          eventSourceRef.current = es;
+          const args = buildFFmpegArgs({ ...opts, input: item.path });
+          setTerminalLogs(prev => [...prev.slice(-199), `[Command] ffmpeg ${args.join(' ')}`]);
 
-          es.onmessage = (e) => {
-            const evData = JSON.parse(e.data);
-            if (evData.status === 'started') {
-              setTerminalLogs(prev => [...prev.slice(-199), '[Started] Job ' + jobId]);
-            } else if (evData.status === 'log' || (evData.status === 'running' && !evData.progress)) {
-               if(evData.message) setTerminalLogs(prev => [...prev.slice(-199), '[Log] ' + evData.message]);
-            } else if (evData.status === 'running' && evData.progress) {
-               setProgress({
-                 frame: evData.progress.frame || 0,
-                 fps: evData.progress.fps || 0,
-                 speed: evData.progress.speed || 1,
-                 size_kb: evData.progress.size_kb || 0,
-                 time_s: evData.progress.time_s || 0,
-                 bitrate_kbps: evData.progress.bitrate_kbps || 0,
-                 progress: evData.progress.progress || 0
-               });
-            } else if (evData.status === 'done') {
-               es.close();
-               
-               // Trigger Download
-               const a = document.createElement('a');
-               a.href = `/download/${jobId}`;
-               a.download = '';
-               a.click();
-               
-               currentJobId.current = null;
-               resolve();
-            } else if (evData.status === 'error') {
-               es.close();
-               const errMsg = evData.error || evData.message || 'Unknown error';
-               setTerminalLogs(prev => [...prev.slice(-199), '[Error] ' + errMsg]);
-               reject(new Error(errMsg));
-            }
-          };
-
-          es.onerror = () => {
-            es.close();
-            reject(new Error('Connection lost'));
-          };
-        });
+          const res = await fetch('/convert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input_path: item.path,
+              mode: opts.mode,
+              fmt: opts.fmt,
+              args: args
+            })
+          });
+          
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          
+          const jobId = data.job_id;
+          currentJobId.current = jobId;
+          await streamJobProgress(jobId);
+        }
       }
       setIsDone(true);
     } catch(e: any) {
@@ -145,6 +168,8 @@ export default function App() {
       currentJobId.current = null;
     }
   };
+
+
   
   const handleCancel = async () => {
       if(currentJobId.current) {
