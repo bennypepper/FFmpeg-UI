@@ -189,7 +189,16 @@ export function MediaEditor(props: MediaEditorProps) {
                <div className="parsed-media-info" style={{ padding: '16px', fontSize: '0.78rem', flex: 1, overflowY: 'auto' }}>
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                    {mediaInfo.format_name && <div style={{gridColumn: '1 / -1'}}><strong>Format:</strong> {mediaInfo.format_name.split(',')[0]}</div>}
-                   {mediaInfo.duration && <div><strong>Duration:</strong> {Math.round(mediaInfo.duration)}s</div>}
+                     {mediaInfo.duration && (
+                       <div>
+                         <strong>Duration:</strong>{' '}
+                         {mediaInfo.duration >= 3600
+                           ? `${Math.floor(mediaInfo.duration / 3600)}h ${Math.floor((mediaInfo.duration % 3600) / 60)}m`
+                           : mediaInfo.duration >= 60
+                             ? `${Math.floor(mediaInfo.duration / 60)}m ${Math.round(mediaInfo.duration % 60)}s`
+                             : `${Math.round(mediaInfo.duration)}s`}
+                       </div>
+                     )}
                    {mediaInfo.size_mb && <div><strong>Size:</strong> {mediaInfo.size_mb} MB</div>}
                    {mediaInfo.bitrate_kbps && <div><strong>Bitrate:</strong> {mediaInfo.bitrate_kbps} kbps</div>}
                    
