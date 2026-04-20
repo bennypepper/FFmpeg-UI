@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import { Store } from '@tauri-apps/plugin-store';
+import { sendNotification } from '@tauri-apps/plugin-notification';
 import { Button, Dropzone, Select, Slider, TerminalOutput } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs, CommandOptions } from '@ffmpeg-ui/core';
 
@@ -42,6 +44,8 @@ export default function App() {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [store, setStore] = useState<Store | null>(null);
+  const [isDownloadingEngine, setIsDownloadingEngine] = useState(false);
   const currentJobId = useRef<string | null>(null);
   const unlisteners = useRef<UnlistenFn[]>([]);
 
@@ -57,6 +61,17 @@ export default function App() {
 
   // ── Boot: check capabilities & subscribe to Tauri events ────────────────
   useEffect(() => {
+    // Init settings store
+    Store.load('ffmpeg-settings.json').then(s => {
+      setStore(s);
+      s.get<CommandOptions>('options').then(savedOpts => {
+        if (savedOpts) {
+          setOptions(savedOpts);
+          addLog('[System] Loaded previous settings');
+        }
+      });
+    }).catch(err => addLog(`[Warning] Could not load settings store: ${err}`));
+
     invoke<Capabilities>('get_capabilities')
       .then(res => {
         setCapabilities(res);
@@ -89,11 +104,21 @@ export default function App() {
           setIsDone(true);
           currentJobId.current = null;
           setProgress(null);
+          
+          sendNotification({
+            title: 'FFmpeg UI',
+            body: '✅ Conversion successfully completed!'
+          });
         } else if (e.payload.level === 'error') {
           setIsProcessing(false);
           setIsDone(false);
           currentJobId.current = null;
           setProgress(null);
+          
+          sendNotification({
+            title: 'FFmpeg UI',
+            body: '❌ Conversion failed.'
+          });
         }
       });
 
@@ -107,6 +132,13 @@ export default function App() {
       unlisteners.current.forEach(fn => fn());
     };
   }, []);
+
+  // ── Auto-save options ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (store) {
+      store.set('options', options);
+    }
+  }, [options, store]);
 
   // ── Live command preview whenever options/file change ────────────────────
   useEffect(() => {
@@ -229,6 +261,24 @@ export default function App() {
     setIsProcessing(false);
     currentJobId.current = null;
     setProgress(null);
+  };
+
+  const handleDownloadEngine = async () => {
+    try {
+      setIsDownloadingEngine(true);
+      addLog('[System] Downloading embedded FFmpeg engine...');
+      await invoke('download_ffmpeg');
+      addLog('[System] Embedded FFmpeg engine installed successfully!');
+      
+      // Re-check capabilities
+      const res = await invoke<Capabilities>('get_capabilities');
+      setCapabilities(res);
+      addLog(`[System] ${res.version}`);
+    } catch (err) {
+      addLog(`[Error] Failed to install engine: ${err}`);
+    } finally {
+      setIsDownloadingEngine(false);
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -406,13 +456,23 @@ export default function App() {
                   <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); setIsDone(false); }}>
                     Clear
                   </Button>
-                  <Button
-                    fullWidth
-                    onClick={handleExecute}
-                    disabled={!capabilities?.has_ffmpeg}
-                  >
-                    {capabilities?.has_ffmpeg ? (isDone ? '🔄 Convert Again' : '▶ Start Encode') : '⚠ FFmpeg Not Found'}
-                  </Button>
+                  {capabilities?.has_ffmpeg ? (
+                    <Button
+                      fullWidth
+                      onClick={handleExecute}
+                    >
+                      {isDone ? '🔄 Convert Again' : '▶ Start Encode'}
+                    </Button>
+                  ) : (
+                    <Button
+                      fullWidth
+                      onClick={handleDownloadEngine}
+                      disabled={isDownloadingEngine}
+                      variant="primary"
+                    >
+                      {isDownloadingEngine ? '⏳ Downloading Engine...' : '🔧 Install FFmpeg Core'}
+                    </Button>
+                  )}
                 </>
               )}
             </div>
