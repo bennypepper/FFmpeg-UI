@@ -1,14 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Button, Dropzone, Select, Slider, TerminalOutput } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs, CommandOptions } from '@ffmpeg-ui/core';
 
+// ─── Types matching Rust payloads ──────────────────────────────────────────
+interface Capabilities {
+  has_ffmpeg: boolean;
+  has_ffprobe: boolean;
+  version: string;
+}
+
+interface ProgressPayload {
+  job_id: string;
+  frame: number;
+  fps: number;
+  speed: number;
+  size_kb: number;
+  time_s: number;
+  bitrate_kbps: number;
+}
+
+interface LogPayload {
+  job_id: string;
+  level: 'info' | 'warning' | 'error' | 'done' | 'started';
+  message: string;
+}
+
+// Stable job ID generator
+function makeJobId(): string {
+  return `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function App() {
-  const [capabilities, setCapabilities] = useState<any>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
+  const [filePath, setFilePath] = useState<string | null>(null);       // native FS path
+  const [fileName, setFileName] = useState<string>('');
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
-  
-  // FFmpeg config state
+  const [progress, setProgress] = useState<ProgressPayload | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const currentJobId = useRef<string | null>(null);
+  const unlisteners = useRef<UnlistenFn[]>([]);
+
+  // FFmpeg encoding options (fed to @ffmpeg-ui/core)
   const [options, setOptions] = useState<CommandOptions>({
     mode: 'convert',
     input: '',
@@ -18,105 +52,297 @@ export default function App() {
     crf: '23',
   });
 
+  // ── Boot: check capabilities & subscribe to Tauri events ────────────────
   useEffect(() => {
-    // Check Tauri Rust backend for capabilities
-    invoke('get_capabilities').then(res => {
+    invoke<Capabilities>('get_capabilities')
+      .then(res => {
         setCapabilities(res);
-        setTerminalLogs(prev => [...prev, `[System] FFmpeg Version: ${(res as any).version}`]);
-    }).catch(err => {
-      setTerminalLogs(prev => [...prev, `[Error] ${err}`]);
-    });
+        addLog(`[System] ${res.version}`);
+        if (!res.has_ffmpeg) {
+          addLog('[Warning] FFmpeg not found on PATH — install it or bundle it.');
+        }
+      })
+      .catch(err => addLog(`[Error] ${err}`));
+
+    // Subscribe to backend events
+    const setupListeners = async () => {
+      const unlistenProgress = await listen<ProgressPayload>('progress-update', e => {
+        if (e.payload.job_id !== currentJobId.current) return;
+        setProgress(e.payload);
+        addLog(
+          `[Progress] Frame ${e.payload.frame} | ${e.payload.fps.toFixed(1)} fps | ${e.payload.speed.toFixed(1)}x speed`
+        );
+      });
+
+      const unlistenLog = await listen<LogPayload>('log-update', e => {
+        if (e.payload.job_id !== currentJobId.current) return;
+        const prefix = e.payload.level === 'error' || e.payload.level === 'warning'
+          ? `[${e.payload.level.toUpperCase()}]`
+          : `[${e.payload.level}]`;
+        addLog(`${prefix} ${e.payload.message}`);
+        if (e.payload.level === 'done' || e.payload.level === 'error') {
+          setIsProcessing(false);
+          currentJobId.current = null;
+          setProgress(null);
+        }
+      });
+
+      unlisteners.current = [unlistenProgress, unlistenLog];
+    };
+
+    setupListeners();
+
+    // Cleanup listeners on unmount
+    return () => {
+      unlisteners.current.forEach(fn => fn());
+    };
   }, []);
 
-  // Whenever file or options change, calculate the preview command using the Core Builder
+  // ── Live command preview whenever options/file change ────────────────────
   useEffect(() => {
-    if (file) {
-      // Create a dummy options object with the filename logic 
-      const testArgs = buildFFmpegArgs({ ...options, input: file.name });
-      const rawCommand = `ffmpeg ${testArgs.join(' ')}`;
-      setTerminalLogs([`[Preview Generation]:`, rawCommand]);
+    if (fileName) {
+      const args = buildFFmpegArgs({ ...options, input: fileName });
+      addLog(`[Preview] ffmpeg ${args.join(' ')}`);
     }
-  }, [options, file]);
+  }, [options, fileName]);
 
-  const handleFileDrop = (selectedFile: File) => {
-    setFile(selectedFile);
-    setTerminalLogs(prev => [...prev, `[Loaded] ${selectedFile.name}`]);
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const addLog = (msg: string) => {
+    setTerminalLogs(prev => [...prev.slice(-199), msg]); // keep last 200 lines
   };
 
-  const handleUpdate = (key: keyof CommandOptions, value: any) => {
+  const handleFileDrop = (selectedFile: File) => {
+    // Browsers give us a File object; we need the real FS path for Tauri.
+    // Cast to the Tauri-augmented File type which exposes .path
+    const nativePath = (selectedFile as any).path as string | undefined;
+    if (nativePath) {
+      setFilePath(nativePath);
+      setFileName(selectedFile.name);
+      addLog(`[Loaded] ${nativePath}`);
+    } else {
+      addLog('[Warning] Could not read native file path — try using the "Open File" button instead.');
+    }
+  };
+
+  // TODO (Phase 3): Install @tauri-apps/plugin-dialog and wire up native open dialog.
+  // For now, file selection is handled exclusively by the Dropzone component.
+  const handleOpenDialog = async () => {
+    addLog('[Info] Native file dialog will be available in the next phase (tauri-plugin-dialog).');
+    addLog('[Info] For now, please drag-and-drop your file onto the Dropzone.');
+  };
+
+  const handleUpdate = (key: keyof CommandOptions, value: string) => {
     setOptions(prev => ({ ...prev, [key]: value }));
   };
 
   const handleExecute = async () => {
-    if (!file) return;
-    setTerminalLogs(prev => [...prev, `[Processing] Starting FFmpeg process natively...`]);
-    // NOTE: This will eventually be attached to invoke('start_convert')
+    if (!filePath || isProcessing) return;
+
+    const jobId = makeJobId();
+    currentJobId.current = jobId;
+    setIsProcessing(true);
+    setProgress(null);
+
+    // Derive output path: same folder, suffixed name
+    const sep = filePath.includes('/') ? '/' : '\\';
+    const parts = filePath.split(sep);
+    const rawName = parts[parts.length - 1];
+    const nameNoExt = rawName.replace(/\.[^.]+$/, '');
+    parts[parts.length - 1] = `${nameNoExt}_converted.${options.fmt}`;
+    const outputPath = parts.join(sep);
+
+    // Build the FFmpeg argument list from core
+    const ffmpegArgs = buildFFmpegArgs({ ...options, input: filePath });
+
+    addLog(`[Job: ${jobId}] Invoking Rust backend…`);
+    addLog(`[Command] ffmpeg -i "${filePath}" ${ffmpegArgs.join(' ')} "${outputPath}" -y`);
+
+    try {
+      await invoke('start_convert', {
+        params: {
+          job_id: jobId,
+          input_path: filePath,
+          output_path: outputPath,
+          args: ffmpegArgs,
+        },
+      });
+    } catch (err) {
+      addLog(`[Fatal] ${err}`);
+      setIsProcessing(false);
+      currentJobId.current = null;
+    }
   };
 
+  const handleCancel = async () => {
+    if (!currentJobId.current) return;
+    await invoke('cancel_job', { jobId: currentJobId.current });
+    addLog(`[Cancelled] Job ${currentJobId.current} cancelled.`);
+    setIsProcessing(false);
+    currentJobId.current = null;
+    setProgress(null);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <h1>FFmpeg UI <span style={{ color: 'var(--accent-primary)', fontSize: '0.5em', verticalAlign: 'middle' }}>TAURI NATIVE</span></h1>
-      
-      {!file && (
-        <Dropzone onFileSelect={handleFileDrop} accept="video/*, audio/*" />
+    <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>
+          FFmpeg UI{' '}
+          <span style={{ color: 'var(--accent-primary)', fontSize: '0.45em', verticalAlign: 'middle', letterSpacing: '0.1em' }}>
+            TAURI NATIVE
+          </span>
+        </h1>
+        {capabilities && (
+          <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>
+            {capabilities.has_ffmpeg ? '🟢' : '🔴'} {capabilities.version.slice(0, 40)}
+          </span>
+        )}
+      </header>
+
+      {/* File selection area */}
+      {!filePath && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <Dropzone onFileSelect={handleFileDrop} accept="video/*, audio/*" />
+          <Button variant="ghost" onClick={handleOpenDialog}>
+            📂 Open File via Native Dialog
+          </Button>
+        </div>
       )}
 
-      {file && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2rem' }}>
-          {/* Settings Column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3>Video Settings</h3>
-            
-            <Select 
+      {/* Main editor UI */}
+      {filePath && (
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }}>
+
+          {/* ── Settings column ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Encoding Settings</h3>
+              <button
+                onClick={() => { setFilePath(null); setFileName(''); setTerminalLogs([]); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.1rem' }}
+                title="Clear file"
+              >✕</button>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.6, wordBreak: 'break-all' }}>
+              📁 {fileName}
+            </p>
+
+            <Select
               label="Processing Mode"
               value={options.mode}
               onChange={e => handleUpdate('mode', e.target.value)}
               options={[
-                { label: 'Standard Convert', value: 'convert' },
+                { label: 'Convert (Re-encode)', value: 'convert' },
                 { label: 'Audio Extract', value: 'audio' },
-                { label: 'Hardware Remux', value: 'remux' }
-              ]} 
+                { label: 'Remux (Stream Copy)', value: 'remux' },
+              ]}
             />
 
-            <Select 
+            <Select
               label="Output Format"
               value={options.fmt}
               onChange={e => handleUpdate('fmt', e.target.value)}
               options={[
                 { label: 'MP4', value: 'mp4' },
                 { label: 'MKV', value: 'mkv' },
-                { label: 'WEBM', value: 'webm' }
-              ]} 
+                { label: 'WebM', value: 'webm' },
+                { label: 'MOV', value: 'mov' },
+                { label: 'MP3', value: 'mp3' },
+                { label: 'AAC', value: 'aac' },
+                { label: 'FLAC', value: 'flac' },
+              ]}
             />
 
-            <Select 
-              label="Video Codec"
-              value={options.vc}
-              onChange={e => handleUpdate('vc', e.target.value)}
+            {options.mode !== 'audio' && (
+              <Select
+                label="Video Codec"
+                value={options.vc}
+                onChange={e => handleUpdate('vc', e.target.value)}
+                options={[
+                  { label: 'H.264 — libx264 (software)', value: 'libx264' },
+                  { label: 'H.265 — libx265 (HEVC)', value: 'libx265' },
+                  { label: 'AV1 — libaom-av1', value: 'libaom-av1' },
+                  { label: 'Copy (Lossless)', value: 'copy' },
+                  { label: 'NVENC H.264 (GPU)', value: 'h264_nvenc' },
+                  { label: 'NVENC H.265 (GPU)', value: 'hevc_nvenc' },
+                ]}
+              />
+            )}
+
+            <Select
+              label="Audio Codec"
+              value={options.ac}
+              onChange={e => handleUpdate('ac', e.target.value)}
               options={[
-                { label: 'H.264 (Software)', value: 'libx264' },
-                { label: 'H.265 (HEVC)', value: 'libx265' },
-                { label: 'Copy (Pass-through)', value: 'copy' }
-              ]} 
+                { label: 'AAC', value: 'aac' },
+                { label: 'MP3 — libmp3lame', value: 'libmp3lame' },
+                { label: 'Opus', value: 'libopus' },
+                { label: 'FLAC', value: 'flac' },
+                { label: 'Copy', value: 'copy' },
+              ]}
             />
 
-            <Slider 
-              label="Quality (CRF)" 
-              min="0" max="51" 
-              value={options.crf} 
-              onChange={e => handleUpdate('crf', e.target.value)}
-            />
+            {options.mode !== 'remux' && options.vc !== 'copy' && (
+              <Slider
+                label={`Quality (CRF ${options.crf})`}
+                min="0"
+                max="51"
+                value={options.crf}
+                onChange={e => handleUpdate('crf', e.target.value)}
+              />
+            )}
           </div>
 
-          /* Execution Column */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', gridColumn: 'span 2' }}>
+          {/* ── Terminal + controls column ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <TerminalOutput logs={terminalLogs} title="FFmpeg Pipeline" />
-            
+
+            {/* Progress bar */}
+            {isProcessing && progress && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{
+                  height: '6px',
+                  borderRadius: '3px',
+                  background: 'rgba(255,255,255,0.1)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, (progress.fps / 60) * 100)}%`,
+                    background: 'var(--accent-primary)',
+                    borderRadius: '3px',
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                  Frame {progress.frame} · {progress.fps.toFixed(1)} fps · {progress.speed.toFixed(2)}x · {progress.size_kb} KB
+                </span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>
-              <Button variant="ghost" onClick={() => setFile(null)}>Clear File</Button>
-              <Button fullWidth onClick={handleExecute} disabled={!capabilities?.has_ffmpeg}>Start Encode</Button>
+              {isProcessing ? (
+                <Button fullWidth variant="ghost" onClick={handleCancel}>
+                  ⏹ Cancel
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setTerminalLogs([]); }}>
+                    Clear
+                  </Button>
+                  <Button
+                    fullWidth
+                    onClick={handleExecute}
+                    disabled={!capabilities?.has_ffmpeg}
+                  >
+                    {capabilities?.has_ffmpeg ? '▶ Start Encode' : '⚠ FFmpeg Not Found'}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
+
         </div>
       )}
     </div>
