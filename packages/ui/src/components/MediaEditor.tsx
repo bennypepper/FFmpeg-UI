@@ -13,6 +13,7 @@ export interface MediaItem {
   name: string;
   path?: string;
   file?: any;
+  probe?: any;
 }
 
 export interface MediaEditorProps {
@@ -270,27 +271,183 @@ export function MediaEditor(props: MediaEditorProps) {
           )}
 
           {activeTab === 'quality' && (
-             <div className="sg">
-                <span className="sg-label">Quality Settings</span>
-                <p style={{fontSize: '.8rem', color: 'var(--text-3)'}}>Controls will go here.</p>
+             <div className="settings-panel">
+               <div className="sg">
+                 <span className="sg-label">Quality (CRF) — lower value = higher quality</span>
+                 <div className="range-wrap">
+                   <span className="range-lbl">28<br/><span style={{fontSize:'.6rem',opacity:.6}}>Small</span></span>
+                   <input type="range" min="0" max="51" value={options.crf || '23'} onChange={(e) => handleUpdate({ crf: e.target.value })} />
+                   <span className="range-lbl">18<br/><span style={{fontSize:'.6rem',opacity:.6}}>High</span></span>
+                 </div>
+                 <p style={{fontSize:'.71rem',color:'var(--text-2)',marginTop:'6px'}}>CRF: <strong>{options.crf || '23'}</strong> (default 23)</p>
+               </div>
+
+               <div className="sg sg-row">
+                 <div className="sg-field">
+                   <label className="sg-label">Video Bitrate (kbps) — overrides CRF</label>
+                   <input type="number" placeholder="e.g. 4000 (optional)" value={options.vbr || ''} onChange={(e) => handleUpdate({ vbr: e.target.value })} />
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Audio Bitrate</label>
+                   <select value={options.ab || '128k'} onChange={(e) => handleUpdate({ ab: e.target.value })}>
+                     <option value="64k">64 kbps</option>
+                     <option value="128k">128 kbps</option>
+                     <option value="192k">192 kbps</option>
+                     <option value="256k">256 kbps</option>
+                     <option value="320k">320 kbps (Max)</option>
+                   </select>
+                 </div>
+               </div>
+
+               <div className="sg sg-row">
+                 <div className="sg-field">
+                   <label className="sg-label">Resolution</label>
+                   <select value={options.res || 'original'} onChange={(e) => handleUpdate({ res: e.target.value })}>
+                     <option value="original">Original (no change)</option>
+                     <option value="4k">4K (3840 px)</option>
+                     <option value="1080p">1080p</option>
+                     <option value="720p">720p</option>
+                     <option value="480p">480p</option>
+                     <option value="360p">360p</option>
+                   </select>
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Target File Size (MB) — triggers 2-pass</label>
+                   <input type="number" placeholder="e.g. 50 (optional)" value={options.tsz || ''} onChange={(e) => handleUpdate({ tsz: e.target.value })} />
+                 </div>
+               </div>
              </div>
           )}
           {activeTab === 'filters' && (
-             <div className="sg">
-                <span className="sg-label">Filter Settings</span>
-                <p style={{fontSize: '.8rem', color: 'var(--text-3)'}}>Controls will go here.</p>
+             <div className="settings-panel">
+               <div className="sg">
+                 <span className="sg-label">Visual Trim</span>
+                 <div className="sg-row" style={{ marginTop: '10px' }}>
+                   <div className="sg-field">
+                     <label className="sg-label">Start Time</label>
+                     <input type="text" placeholder="HH:MM:SS (blank = from start)" value={options.ts_start || ''} onChange={(e) => handleUpdate({ ts_start: e.target.value })} />
+                   </div>
+                   <div className="sg-field">
+                     <label className="sg-label">End Time</label>
+                     <input type="text" placeholder="HH:MM:SS (blank = to end)" value={options.ts_end || ''} onChange={(e) => handleUpdate({ ts_end: e.target.value })} />
+                   </div>
+                 </div>
+               </div>
+
+               <div className="sg">
+                 <span className="sg-label">Speed</span>
+                 <div className="speed-group">
+                   {[0.25, 0.5, 1, 1.5, 2].map(s => (
+                     <button key={s} className={`speed-btn ${options.speed === s || (!options.speed && s === 1) ? 'active' : ''}`} onClick={() => handleUpdate({ speed: s })}>
+                       {s}×
+                     </button>
+                   ))}
+                 </div>
+               </div>
+
+               <div className="sg">
+                 <span className="sg-label">Video Filters</span>
+                 <div className="check-group">
+                   <label className="chk-label"><input type="checkbox" checked={options.deint || false} onChange={(e) => handleUpdate({ deint: e.target.checked })} /> Deinterlace (yadif)</label>
+                   <label className="chk-label"><input type="checkbox" checked={options.gray || false} onChange={(e) => handleUpdate({ gray: e.target.checked })} /> Grayscale</label>
+                   <label className="chk-label"><input type="checkbox" checked={options.den || false} onChange={(e) => handleUpdate({ den: e.target.checked })} /> Denoise</label>
+                   <label className="chk-label"><input type="checkbox" checked={options.sharp || false} onChange={(e) => handleUpdate({ sharp: e.target.checked })} /> Sharpen</label>
+                 </div>
+               </div>
              </div>
           )}
           {activeTab === 'audio' && (
-             <div className="sg">
-                <span className="sg-label">Audio Settings</span>
-                <p style={{fontSize: '.8rem', color: 'var(--text-3)'}}>Controls will go here.</p>
+             <div className="settings-panel">
+               <div className="sg sg-row">
+                 <div className="sg-field">
+                   <label className="sg-label">Audio Codec</label>
+                   <select value={options.ac || 'aac'} onChange={(e) => handleUpdate({ ac: e.target.value })}>
+                     <option value="aac">AAC (default)</option>
+                     <option value="libmp3lame">MP3</option>
+                     <option value="libopus">Opus</option>
+                     <option value="flac">FLAC (lossless)</option>
+                     <option value="copy">Copy (passthrough)</option>
+                   </select>
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Sample Rate</label>
+                   <select value={options.sr || ''} onChange={(e) => handleUpdate({ sr: e.target.value })}>
+                     <option value="">Original</option>
+                     <option value="22050">22050 Hz</option>
+                     <option value="44100">44100 Hz (CD)</option>
+                     <option value="48000">48000 Hz (DVD)</option>
+                   </select>
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Channels</label>
+                   <select value={options.ch || ''} onChange={(e) => handleUpdate({ ch: e.target.value })}>
+                     <option value="">Original</option>
+                     <option value="1">Mono</option>
+                     <option value="2">Stereo</option>
+                     <option value="6">5.1 Surround</option>
+                   </select>
+                 </div>
+               </div>
+
+               <div className="sg">
+                 <label className="sg-label">Volume — <span>{Math.round((options.vol ?? 1) * 100)}%</span></label>
+                 <div className="range-wrap">
+                   <span className="range-lbl">0%</span>
+                   <input type="range" min="0" max="3" step="0.05" value={options.vol ?? 1.0} onChange={(e) => handleUpdate({ vol: parseFloat(e.target.value) })} />
+                   <span className="range-lbl">300%</span>
+                 </div>
+               </div>
+
+               <div className="sg">
+                 <div className="check-group">
+                   <label className="chk-label"><input type="checkbox" checked={options.norm || false} onChange={(e) => handleUpdate({ norm: e.target.checked })} /> Normalize Loudness (loudnorm)</label>
+                   <label className="chk-label"><input type="checkbox" checked={options.noAudio || false} onChange={(e) => handleUpdate({ noAudio: e.target.checked })} /> Remove Audio (-an)</label>
+                 </div>
+               </div>
              </div>
           )}
           {activeTab === 'advanced' && (
-             <div className="sg">
-                <span className="sg-label">Advanced Settings</span>
-                <p style={{fontSize: '.8rem', color: 'var(--text-3)'}}>Controls will go here.</p>
+             <div className="settings-panel">
+               <div className="sg sg-row">
+                 <div className="sg-field">
+                   <label className="sg-label">Encoding Speed (Preset)</label>
+                   <select value={options.preset || 'medium'} onChange={(e) => handleUpdate({ preset: e.target.value })}>
+                     <option value="veryslow">Very Slow (best quality)</option>
+                     <option value="slow">Slow</option>
+                     <option value="medium">Medium (balanced)</option>
+                     <option value="fast">Fast</option>
+                     <option value="ultrafast">Ultra Fast</option>
+                   </select>
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Frame Rate</label>
+                   <select value={options.fps || ''} onChange={(e) => handleUpdate({ fps: e.target.value })}>
+                     <option value="">Original</option>
+                     <option value="24">24</option>
+                     <option value="30">30</option>
+                     <option value="60">60</option>
+                   </select>
+                 </div>
+                 <div className="sg-field">
+                   <label className="sg-label">Pixel Format</label>
+                   <select value={options.pixFmt || 'yuv420p'} onChange={(e) => handleUpdate({ pixFmt: e.target.value })}>
+                     <option value="yuv420p">yuv420p (most compatible)</option>
+                     <option value="yuv422p">yuv422p</option>
+                     <option value="yuv444p">yuv444p</option>
+                   </select>
+                 </div>
+               </div>
+
+               <div className="sg">
+                 <div className="check-group">
+                   <label className="chk-label"><input type="checkbox" checked={options.noMeta || false} onChange={(e) => handleUpdate({ noMeta: e.target.checked })} /> Strip all metadata</label>
+                 </div>
+               </div>
+               
+               <div className="sg">
+                 <label className="sg-label">Custom FFmpeg Arguments</label>
+                 <input type="text" placeholder='-vf eq=brightness=0.1' value={options.custom || ''} onChange={(e) => handleUpdate({ custom: e.target.value })} />
+               </div>
              </div>
           )}
         </div>
