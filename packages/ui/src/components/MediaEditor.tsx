@@ -69,7 +69,8 @@ export function MediaEditor(props: MediaEditorProps) {
               className={`seg-btn ${activeMode === 'video' ? 'active' : ''}`}
               onClick={() => {
                 setActiveMode('video');
-                handleUpdate({ mode: 'convert' });
+                handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', ac: 'aac' });
+                setActiveTab('format');
               }}
             >
               <Film size={14} style={{marginRight: 6}} /> Video
@@ -78,7 +79,8 @@ export function MediaEditor(props: MediaEditorProps) {
               className={`seg-btn ${activeMode === 'audio' ? 'active' : ''}`}
               onClick={() => {
                 setActiveMode('audio');
-                handleUpdate({ mode: 'audio' });
+                handleUpdate({ mode: 'audio', fmt: 'mp3', vc: undefined, ac: undefined });
+                setActiveTab('format');
               }}
             >
               <Music size={14} style={{marginRight: 6}} /> Audio
@@ -179,13 +181,36 @@ export function MediaEditor(props: MediaEditorProps) {
           </div>
           <div style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100% - 37px)' }}>
             {!mediaInfo ? (
-               <div className="media-info-empty" style={{ flex: 1 }}>
-                 <Film size={36} className="mi-icon" />
-                 <p>Drop a file to inspect</p>
+               <div className="media-info-empty" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                 <Film size={36} className="mi-icon" style={{ opacity: 0.5, marginBottom: '10px' }} />
+                 <p style={{ margin: 0, opacity: 0.7 }}>Drop a file to inspect</p>
                </div>
             ) : (
-               <div style={{ padding: '16px', fontSize: '0.73rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', flex: 1, overflowY: 'auto' }}>
-                 {JSON.stringify(mediaInfo, null, 2)}
+               <div className="parsed-media-info" style={{ padding: '16px', fontSize: '0.78rem', flex: 1, overflowY: 'auto' }}>
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                   {mediaInfo.format_name && <div style={{gridColumn: '1 / -1'}}><strong>Format:</strong> {mediaInfo.format_name.split(',')[0]}</div>}
+                   {mediaInfo.duration && <div><strong>Duration:</strong> {Math.round(mediaInfo.duration)}s</div>}
+                   {mediaInfo.size_mb && <div><strong>Size:</strong> {mediaInfo.size_mb} MB</div>}
+                   {mediaInfo.bitrate_kbps && <div><strong>Bitrate:</strong> {mediaInfo.bitrate_kbps} kbps</div>}
+                   
+                   {mediaInfo.video_codec && (
+                     <>
+                       <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Video Stream</strong></div>
+                       <div><strong>Codec:</strong> {mediaInfo.video_codec.toUpperCase()}</div>
+                       {mediaInfo.width && <div><strong>Res:</strong> {mediaInfo.width}x{mediaInfo.height}</div>}
+                       {mediaInfo.fps && <div><strong>FPS:</strong> {Math.round(mediaInfo.fps)}</div>}
+                     </>
+                   )}
+                   
+                   {mediaInfo.audio_codec && (
+                     <>
+                       <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Audio Stream</strong></div>
+                       <div><strong>Codec:</strong> {mediaInfo.audio_codec.toUpperCase()}</div>
+                       {mediaInfo.sample_rate && <div><strong>Sample Rate:</strong> {mediaInfo.sample_rate} Hz</div>}
+                       {mediaInfo.channels && <div><strong>Channels:</strong> {mediaInfo.channels === 2 ? 'Stereo' : (mediaInfo.channels === 1 ? 'Mono' : mediaInfo.channels)}</div>}
+                     </>
+                   )}
+                 </div>
                </div>
             )}
           </div>
@@ -193,98 +218,173 @@ export function MediaEditor(props: MediaEditorProps) {
       </div>
 
       {/* ── Sub Mode Bar ── */}
+      {activeMode === 'video' && (
       <div className="mode-bar">
         <button 
+          className={`mode-btn ${options.mode === 'convert' ? 'active' : ''}`} 
+          onClick={() => { handleUpdate({ mode: 'convert' }); setActiveTab('format'); }}
+        >
+          <Film size={14} /> Normal
+        </button>
+        <button 
           className={`mode-btn ${options.mode === 'remux' ? 'active' : ''}`} 
-          onClick={() => handleUpdate({ mode: 'remux' })}
+          onClick={() => { handleUpdate({ mode: 'remux' }); setActiveTab('format'); }}
         >
           <Package size={14} /> Remux
         </button>
         <button 
           className={`mode-btn ${options.mode === 'thumbnail' ? 'active' : ''}`} 
-          onClick={() => handleUpdate({ mode: 'thumbnail' })}
+          onClick={() => { handleUpdate({ mode: 'thumbnail' }); setActiveTab('format'); }}
         >
           <ImageIcon size={14} /> Thumbnail
         </button>
         <button 
           className={`mode-btn ${options.mode === 'merge' ? 'active' : ''}`} 
-          onClick={() => handleUpdate({ mode: 'merge' })}
+          onClick={() => { handleUpdate({ mode: 'merge' }); setActiveTab('format'); }}
         >
           <Layers size={14} /> Merge
         </button>
       </div>
+      )}
 
       {/* ── Presets Bar ── */}
       <div className="presets-bar">
-        <span className="presets-label">Quick Presets</span>
-        <div className="presets-group">
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264' });
-          }}><Film size={12}/> TikTok</button>
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264' });
-          }}><Film size={12}/> Instagram</button>
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264' });
-          }}><Film size={12}/> YouTube</button>
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264' });
-          }}><Film size={12}/> Twitter / X</button>
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264', crf: '32' });
-          }}><Film size={12}/> Discord &lt;8MB</button>
-          <button className="preset-btn" onClick={() => {
-            handleUpdate({ fmt: 'mp4', vc: 'libx264' });
-          }}><Film size={12}/> WhatsApp</button>
-        </div>
+        {activeMode === 'video' ? (
+        <>
+          <span className="presets-label">Quick Presets</span>
+          <div className="presets-group">
+            <button className="preset-btn" onClick={() => {
+              setActiveTab('format');
+              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '23' });
+            }}><Film size={12}/> TikTok / IG</button>
+            <button className="preset-btn" onClick={() => {
+              setActiveTab('format');
+              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '20' });
+            }}><Film size={12}/> YouTube</button>
+            <button className="preset-btn" onClick={() => {
+              setActiveTab('format');
+              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '32' });
+            }}><Film size={12}/> Discord &lt;8MB</button>
+            <button className="preset-btn" onClick={() => {
+               setActiveTab('format');
+               handleUpdate({ mode: 'convert', fmt: 'mkv', vc: 'libx265', crf: '24' });
+            }}><Archive size={12}/> Archival MKV</button>
+          </div>
+        </>
+        ) : (
+        <>
+          <span className="presets-label">Audio Presets</span>
+          <div className="presets-group">
+            <button className="preset-btn" onClick={() => {
+              setActiveTab('format');
+              handleUpdate({ mode: 'audio', fmt: 'mp3', ab: '320k' });
+            }}><Music size={12}/> HQ MP3</button>
+            <button className="preset-btn" onClick={() => {
+               setActiveTab('format');
+               handleUpdate({ mode: 'audio', fmt: 'm4a', ac: 'aac', ab: '256k' });
+            }}><Music size={12}/> Apple AAC</button>
+            <button className="preset-btn" onClick={() => {
+               setActiveTab('format');
+               handleUpdate({ mode: 'audio', fmt: 'ogg', ac: 'libopus', ab: '64k' });
+            }}><Music size={12}/> Voice (Opus)</button>
+            <button className="preset-btn" onClick={() => {
+               setActiveTab('format');
+               handleUpdate({ mode: 'audio', fmt: 'wav', ac: 'pcm_s16le' });
+            }}><Music size={12}/> Lossless WAV</button>
+          </div>
+        </>
+        )}
       </div>
 
       {/* ── Settings Container ── */}
       <div id="settings-container" style={{ marginTop: '14px' }}>
         <div className="settings-tabs">
           <button className={`tab-btn ${activeTab === 'format' ? 'active' : ''}`} onClick={() => setActiveTab('format')}>Output Format</button>
-          <button className={`tab-btn ${activeTab === 'quality' ? 'active' : ''}`} onClick={() => setActiveTab('quality')}>Quality</button>
-          <button className={`tab-btn ${activeTab === 'filters' ? 'active' : ''}`} onClick={() => setActiveTab('filters')}>Filters</button>
-          <button className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`} onClick={() => setActiveTab('audio')}>Audio</button>
-          <button className={`tab-btn ${activeTab === 'advanced' ? 'active' : ''}`} onClick={() => setActiveTab('advanced')}>Advanced</button>
+          
+          {(activeMode === 'video' && ['convert', 'remux'].includes(options.mode)) && (
+             <button className={`tab-btn ${activeTab === 'quality' ? 'active' : ''}`} onClick={() => setActiveTab('quality')}>Quality</button>
+          )}
+          
+          {(activeMode === 'video' && options.mode === 'convert') && (
+             <button className={`tab-btn ${activeTab === 'filters' ? 'active' : ''}`} onClick={() => setActiveTab('filters')}>Filters</button>
+          )}
+
+          {(options.mode === 'convert' || options.mode === 'audio') && (
+             <button className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`} onClick={() => setActiveTab('audio')}>Audio</button>
+          )}
+          
+          {(activeMode === 'video' && options.mode === 'convert') && (
+             <button className={`tab-btn ${activeTab === 'advanced' ? 'active' : ''}`} onClick={() => setActiveTab('advanced')}>Advanced</button>
+          )}
         </div>
 
         <div className="settings-panel">
+          {options.mode === 'remux' && activeTab === 'format' && (
+             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
+                 <Package size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
+                 <h4 style={{ margin: '0 0 6px 0' }}>Remux Mode</h4>
+                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Quickly change the container format without re-encoding video or audio.<br/>Select the output format below.</p>
+             </div>
+          )}
+          {options.mode === 'thumbnail' && activeTab === 'format' && (
+             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
+                 <ImageIcon size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
+                 <h4 style={{ margin: '0 0 6px 0' }}>Thumbnail Mode</h4>
+                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Extracts a single image frame from the video at 00:00:05.<br/>Select the output format below (e.g. JPG).</p>
+             </div>
+          )}
+          {options.mode === 'merge' && activeTab === 'format' && (
+             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
+                 <Layers size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
+                 <h4 style={{ margin: '0 0 6px 0' }}>Merge Mode</h4>
+                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Concatenates multiple files from the queue in order.<br/>Ensure all inputs share the same resolution and codecs for best results.</p>
+             </div>
+          )}
           {activeTab === 'format' && (
             <>
               <div className="sg">
-                <span className="sg-label">Container</span>
+                <span className="sg-label">Container/Format</span>
                 <div className="sg-row">
-                  <div className="sg-field" style={{ maxWidth: '220px' }}>
-                    <select value={options.fmt || (options.mode === 'audio' ? 'mp3' : 'mp4')} onChange={(e) => handleUpdate({ fmt: e.target.value })}>
-                      {options.mode === 'audio' ? (
+                  <div className="sg-field" style={{ maxWidth: '220px' }}>      
+                    <select value={options.fmt || (activeMode === 'audio' ? 'mp3' : 'mp4')} onChange={(e) => handleUpdate({ fmt: e.target.value })}>
+                      {options.mode === 'thumbnail' ? (
+                        <>
+                          <option value="jpg">JPG — Standard</option>
+                          <option value="png">PNG — Lossless</option>
+                          <option value="webp">WebP</option>
+                        </>
+                      ) : activeMode === 'audio' ? (
                         <>
                           <option value="mp3">MP3 — Compressed</option>
                           <option value="wav">WAV — Lossless</option>
+                          <option value="ogg">Ogg / Opus</option>
+                          <option value="m4a">M4A (AAC)</option>
                           <option value="flac">FLAC — Lossless compressed</option>
-                          <option value="aac">AAC — Apple</option>
                         </>
                       ) : (
                         <>
                           <option value="mp4">MP4 — Universal</option>
                           <option value="mkv">MKV — Archival</option>
                           <option value="webm">WebM — Open Web</option>
-                          <option value="mov">MOV — Apple / Edit</option>
+                          <option value="mov">MOV — Apple / Edit</option>       
                         </>
                       )}
                     </select>
                   </div>
+                  {activeMode === 'video' && options.mode !== 'thumbnail' && (
                   <label className="chk-label web-optimize-wrap">
                     <input type="checkbox" checked={true} readOnly /> Web Optimize (faststart, MP4 only)
                   </label>
+                  )}
                 </div>
               </div>
 
+              {options.mode === 'convert' && (
               <div className="sg">
                 <span className="sg-label">Video Engine</span>
                 <div className="codec-group">
                   <label className={`codec-item ${options.vc === 'libx264' || !options.vc ? 'active' : ''}`}>
-                    <input type="radio" name="vcodec" checked={options.vc === 'libx264' || !options.vc} onChange={() => handleUpdate({ vc: 'libx264' })} />
+                    <input type="radio" name="vcodec" checked={options.vc === 'libx264' || !options.vc} onChange={() => handleUpdate({ vc: 'libx264' })} />     
                     <div>
                       <div className="ci-label">Standard (Most Compatible)</div>
                       <div className="ci-desc">H.264 — plays on 99% of devices</div>
@@ -294,13 +394,14 @@ export function MediaEditor(props: MediaEditorProps) {
                   <label className={`codec-item ${options.vc === 'libx265' ? 'active' : ''}`}>
                     <input type="radio" name="vcodec" checked={options.vc === 'libx265'} onChange={() => handleUpdate({ vc: 'libx265' })} />
                     <div>
-                      <div className="ci-label">High Efficiency (Modern)</div>
+                      <div className="ci-label">High Efficiency (Modern)</div>  
                       <div className="ci-desc">H.265 — ~50% smaller than H.264</div>
                     </div>
                     <span className="cap-badge" style={{ marginLeft: 'auto' }}>Available</span>
                   </label>
                 </div>
               </div>
+              )}
             </>
           )}
 
