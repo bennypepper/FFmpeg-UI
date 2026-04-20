@@ -8,7 +8,9 @@ fn main() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::get_capabilities,
-            commands::probe_file
+            commands::probe_file,
+            commands::start_convert,
+            commands::cancel_job,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
