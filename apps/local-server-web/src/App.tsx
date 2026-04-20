@@ -22,8 +22,8 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         setCapabilities({ 
-          has_ffmpeg: data.ffmpeg_version !== 'unknown',
-          version: data.ffmpeg_version
+          has_ffmpeg: data.has_ffmpeg,
+          version: data.version
         });
       })
       .catch(err => {
@@ -124,8 +124,9 @@ export default function App() {
                resolve();
             } else if (evData.status === 'error') {
                es.close();
-               setTerminalLogs(prev => [...prev.slice(-199), '[Error] ' + evData.message]);
-               reject(new Error(evData.message));
+               const errMsg = evData.error || evData.message || 'Unknown error';
+               setTerminalLogs(prev => [...prev.slice(-199), '[Error] ' + errMsg]);
+               reject(new Error(errMsg));
             }
           };
 
