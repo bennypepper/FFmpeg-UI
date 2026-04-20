@@ -1,0 +1,79 @@
+.dropzone {
+  width: 100%;
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 3rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: var(--bg-panel);
+  transition: all var(--transition-smooth);
+  cursor: pointer;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.dropzone::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--accent-gradient);
+  opacity: 0;
+  transition: opacity var(--transition-smooth);
+  z-index: 0;
+}
+
+.dropzone:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-panel-hover);
+}
+
+.isDragging {
+  border-color: var(--accent-primary);
+  transform: scale(1.02);
+}
+
+.isDragging::before {
+  opacity: 0.05;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.icon {
+  width: 48px;
+  height: 48px;
+  color: var(--accent-primary);
+  margin-bottom: 8px;
+  transition: transform var(--transition-smooth);
+}
+
+.dropzone:hover .icon, .isDragging .icon {
+  transform: translateY(-5px);
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.fileInput {
+  display: none;
+}
