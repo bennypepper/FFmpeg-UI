@@ -56,80 +56,125 @@ export function MediaEditor(props: MediaEditorProps) {
   const activeItem = queue.find(q => q.id === activeFileId) || null;
 
   return (
-    <div className="app-container">
-      {/* ── Header ── */}
-      <header className="app-header">
-        <div className="app-brand" style={{ marginLeft: '10px' }}>
-          FFmpeg Web UI
-        </div>
-
-        <div className="main-toggle-wrap">
-          <div className="segment-group">
-            <button 
-              className={`seg-btn ${activeMode === 'video' ? 'active' : ''}`}
+    <div className="app-layout">
+      {/* ── Main Pane ── */}
+      <div className="main-pane">
+        <header className="app-header" style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div className="app-brand" style={{ margin: 0 }}>FFmpeg Web UI</div>  
+          <div className="header-right" style={{ display: 'flex', alignItems: 'center' }}>
+            {!capabilities && (
+              <button className="btn btn-ghost" onClick={onDownloadEngine} disabled={isDownloadingEngine}>
+                <Layers size={14} style={{marginRight: 6}} />
+                Install FFmpeg
+              </button>
+            )}
+            <button
+              className="btn btn-ghost" 
+              title="Toggle theme"
+              style={{ padding: '8px', marginLeft: 'auto' }}
               onClick={() => {
-                setActiveMode('video');
-                handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', ac: 'aac' });
-                setActiveTab('format');
+                const current = document.documentElement.getAttribute('data-theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
               }}
             >
-              <Film size={14} style={{marginRight: 6}} /> Video
-            </button>
-            <button 
-              className={`seg-btn ${activeMode === 'audio' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveMode('audio');
-                handleUpdate({ mode: 'audio', fmt: 'mp3', vc: undefined, ac: undefined });
-                setActiveTab('format');
-              }}
-            >
-              <Music size={14} style={{marginRight: 6}} /> Audio
+              <Sun size={20} />
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="header-right">
-          {capabilities ? (
-            <span className="cap-badge">
-              {capabilities.version}
-            </span>
-          ) : (
-            <button className="btn btn-ghost" onClick={onDownloadEngine} disabled={isDownloadingEngine}>
-              <Layers size={14} style={{marginRight: 6}} /> 
-              Install FFmpeg
-            </button>
-          )}
-          <button 
-            className="btn btn-ghost" 
-            title="Toggle theme" 
-            style={{ padding: '6px' }}
-            onClick={() => {
-              const current = document.documentElement.getAttribute('data-theme') || 'dark';
-              document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
-            }}
-          >
-            <Sun size={16} />
-          </button>
-        </div>
-      </header>
+        <div className="main-scrollable">
+          <div className="main-top">
+            <div className="card" style={{ flex: 1 }}>
+              <div
+                className="drop-zone"
+                onClick={onAddFiles}
+                onDragOver={(e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--primary)';
+                   (e.currentTarget as HTMLDivElement).style.background = 'var(--primary-transparent, rgba(0, 120, 212, 0.05))';
+                }}
+                onDragLeave={(e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)';
+                   (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card)';
+                }}
+                onDrop={(e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)';
+                   (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card)';
+                   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { 
+                     onDropFiles(Array.from(e.dataTransfer.files));
+                   }
+                }}
+              >
+                 <Upload size={40} className="dz-icon" />
+                 <p className="dz-title">Drop files here or click to browse</p> 
+                 <p className="dz-sub">Any video or audio format &mdash; multiple files supported</p>
+              </div>
+            </div>
 
-      {/* ── Top Grid: Drop Zone + Queue | Media Info ── */}
-      <div className="top-grid">
-        <div className="left-panel">
-          {/* Drop Zone */}
-          <div className="card">
-            <div className="drop-zone" onClick={onAddFiles}>
-               <Upload size={40} className="dz-icon" />
-               <p className="dz-title">Drop files here or click to browse</p>
-               <p className="dz-sub">Any video or audio format &mdash; multiple files supported</p>
-               <div style={{ position: 'absolute', inset: 0, opacity: 0 }}>
-                 <Dropzone onFileSelect={(f) => onDropFiles([f])} accept="video/*, audio/*" />
-               </div>
+            {/* Media Info */}
+            <div className="card meta-card">
+              <div className="card-header">
+                <span className="card-title">
+                  <BarChart size={12} style={{marginRight: 6}} /> Media Info    
+                </span>
+                <div className="info-tabs tab-pill" style={{ display: 'flex', gap: '2px' }}>
+                  <button className="info-tab-btn active tp-btn" style={{border:'none', cursor:'pointer', padding: '4px 10px', fontSize: '.7rem', background: 'var(--glass-3)', borderRadius: '4px'}}>Info</button>
+                  <button className="info-tab-btn tp-btn" style={{border:'none', cursor:'pointer', padding: '4px 10px', fontSize: '.7rem', background: 'transparent'}}>Preview</button>
+                </div>
+              </div>
+              <div style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100% - 37px)', minHeight: '150px' }}>
+                {!mediaInfo ? (
+                   <div className="media-info-empty" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}> 
+                     <Film size={36} className="mi-icon" style={{ opacity: 0.5, marginBottom: '10px' }} />
+                     <p style={{ margin: 0, opacity: 0.7 }}>Drop a file to inspect</p>
+                   </div>
+                ) : (
+                   <div className="parsed-media-info" style={{ padding: '16px', fontSize: '0.78rem', flex: 1, overflowY: 'auto' }}>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                       {mediaInfo.format_name && <div style={{gridColumn: '1 / -1'}}><strong>Format:</strong> {mediaInfo.format_name.split(',')[0]}</div>}
+                         {mediaInfo.duration && (
+                           <div>
+                             <strong>Duration:</strong>{' '}
+                             {mediaInfo.duration >= 3600
+                               ? `${Math.floor(mediaInfo.duration / 3600)}h ${Math.floor((mediaInfo.duration % 3600) / 60)}m`
+                               : mediaInfo.duration >= 60
+                                 ? `${Math.floor(mediaInfo.duration / 60)}m ${Math.round(mediaInfo.duration % 60)}s`
+                                 : `${Math.round(mediaInfo.duration)}s`}
+                           </div>
+                         )}
+                       {mediaInfo.size_mb && <div><strong>Size:</strong> {mediaInfo.size_mb} MB</div>}
+                       {mediaInfo.bitrate_kbps && <div><strong>Bitrate:</strong> {mediaInfo.bitrate_kbps} kbps</div>}
+
+                       {mediaInfo.video_codec && (
+                         <>
+                           <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Video Stream</strong></div>
+                           <div><strong>Codec:</strong> {mediaInfo.video_codec.toUpperCase()}</div>
+                           {mediaInfo.width && <div><strong>Res:</strong> {mediaInfo.width}x{mediaInfo.height}</div>}
+                           {mediaInfo.fps && <div><strong>FPS:</strong> {Math.round(mediaInfo.fps)}</div>}
+                         </>
+                       )}
+
+                       {mediaInfo.audio_codec && (
+                         <>
+                           <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Audio Stream</strong></div>
+                           <div><strong>Codec:</strong> {mediaInfo.audio_codec.toUpperCase()}</div>
+                           {mediaInfo.sample_rate && <div><strong>Sample Rate:</strong> {mediaInfo.sample_rate} Hz</div>}
+                           {mediaInfo.channels && <div><strong>Channels:</strong> {mediaInfo.channels === 2 ? 'Stereo' : (mediaInfo.channels === 1 ? 'Mono' : mediaInfo.channels)}</div>}
+                         </>
+                       )}
+                     </div>
+                   </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Queue */}
-          <div className="card batch-card">
+          <div className="card batch-card" style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="card-header">
               <span className="card-title">
                 <List size={12} style={{marginRight: 6}} /> Batch Queue
@@ -141,7 +186,7 @@ export function MediaEditor(props: MediaEditorProps) {
                 </button>
               </div>
             </div>
-            <div className="queue-list" style={{ padding: '10px' }}>
+            <div className="queue-list" style={{ padding: '10px', flex: 1, overflowY: 'auto' }}>
               {queue.length === 0 ? (
                 <div className="queue-empty">Drop files above to add them to the queue</div>
               ) : (
@@ -150,13 +195,13 @@ export function MediaEditor(props: MediaEditorProps) {
                     <div className="qi-status"><Film size={14} /></div>
                     <div className="qi-info">
                       <div className="qi-name">{item.name}</div>
-                      <div className="qi-sub">{item.path || 'Local File'}</div>
+                      <div className="qi-sub">{item.path || 'Local File'}</div> 
                     </div>
                     <div className="qi-actions">
-                      <button className="btn-icon btn-ghost" onClick={(e) => {
+                      <button className="btn-icon btn-ghost" onClick={(e) => {  
                         e.stopPropagation();
-                        setQueue(old => old.filter(i => i.id !== item.id));
-                        if (activeFileId === item.id) setActiveFileId(null);
+                        setQueue(old => old.filter(i => i.id !== item.id));     
+                        if (activeFileId === item.id) setActiveFileId(null);    
                       }} style={{border:'none', background:'transparent', cursor:'pointer' }}>
                         <X size={12} />
                       </button>
@@ -168,452 +213,158 @@ export function MediaEditor(props: MediaEditorProps) {
           </div>
         </div>
 
-        {/* Media Info */}
-        <div className="card meta-card">
-          <div className="card-header">
-            <span className="card-title">
-              <BarChart size={12} style={{marginRight: 6}} /> Media Info
-            </span>
-            <div className="info-tabs tab-pill" style={{ display: 'flex', gap: '2px' }}>
-              <button className="info-tab-btn active tp-btn" style={{border:'none', cursor:'pointer', padding: '4px 10px', fontSize: '.7rem', background: 'var(--glass-3)', borderRadius: '4px'}}>Info</button>
-              <button className="info-tab-btn tp-btn" style={{border:'none', cursor:'pointer', padding: '4px 10px', fontSize: '.7rem', background: 'transparent'}}>Preview</button>
+        {/* Terminal */}
+        <div className="terminal-dock">
+          <TerminalOutput logs={terminalLogs} title="FFmpeg Log Console" />
+        </div>
+      </div>
+
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        <div className="sidebar-content">
+          <div className="main-toggle-wrap" style={{ margin: '0 auto 16px auto', maxWidth: '240px' }}>
+            <div className="segment-group" style={{ width: '100%', display: 'flex' }}>
+              <button
+                style={{ flex: '1 1 0', justifyContent: 'center' }}
+                className={`seg-btn ${activeMode === 'video' ? 'active' : ''}`}   
+                onClick={() => {
+                  setActiveMode('video');
+                  handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', ac: 'aac' });
+                  setActiveTab('format');
+                }}
+              >
+                <Film size={14} style={{marginRight: 4}} /> Video
+              </button>
+              <button
+                style={{ flex: '1 1 0', justifyContent: 'center' }}
+                className={`seg-btn ${activeMode === 'audio' ? 'active' : ''}`}   
+                onClick={() => {
+                  setActiveMode('audio');
+                  handleUpdate({ mode: 'audio', fmt: 'mp3', vc: undefined, ac: undefined });
+                  setActiveTab('format');
+                }}
+              >
+                <Music size={14} style={{marginRight: 4}} /> Audio
+              </button>
             </div>
           </div>
-          <div style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100% - 37px)' }}>
-            {!mediaInfo ? (
-               <div className="media-info-empty" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                 <Film size={36} className="mi-icon" style={{ opacity: 0.5, marginBottom: '10px' }} />
-                 <p style={{ margin: 0, opacity: 0.7 }}>Drop a file to inspect</p>
-               </div>
+
+          {activeMode === 'video' && (
+          <div className="mode-bar" style={{ margin: 0, justifyContent: 'center' }}>
+            <button
+              className={`mode-btn ${options.mode === 'convert' ? 'active' : ''}`}  
+              onClick={() => { handleUpdate({ mode: 'convert' }); setActiveTab('format'); }}
+            >
+              <Film size={14} /> Normal
+            </button>
+            <button
+              className={`mode-btn ${options.mode === 'remux' ? 'active' : ''}`}    
+              onClick={() => { handleUpdate({ mode: 'remux' }); setActiveTab('format'); }}
+            >
+              <Package size={14} /> Remux
+            </button>
+            <button
+              className={`mode-btn ${options.mode === 'thumbnail' ? 'active' : ''}`}
+
+              onClick={() => { handleUpdate({ mode: 'thumbnail' }); setActiveTab('format'); }}
+            >
+              <ImageIcon size={14} /> Thumb
+            </button>
+            <button
+              className={`mode-btn ${options.mode === 'merge' ? 'active' : ''}`}    
+              onClick={() => { handleUpdate({ mode: 'merge' }); setActiveTab('format'); }}
+            >
+              <Layers size={14} /> Merge
+            </button>
+          </div>
+          )}
+
+          <div className="presets-bar" style={{ margin: '0 0 16px 0', flexDirection: 'column', alignItems: 'flex-start', border: 'none', padding: '0 4px', background: 'transparent' }}>
+            {activeMode === 'video' ? (
+            <>
+              <span className="presets-label" style={{ marginBottom: '8px', opacity: 0.6 }}>Quick Presets</span>
+              <div className="presets-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                  setActiveTab('format');
+                  handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '23' });
+                }}><Film size={12}/> TikTok / IG</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                  setActiveTab('format');
+                  handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '20' });
+                }}><Film size={12}/> YouTube</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                  setActiveTab('format');
+                  handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '32' });
+                }}><Film size={12}/> Discord &lt;8MB</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                   setActiveTab('format');
+                   handleUpdate({ mode: 'convert', fmt: 'mkv', vc: 'libx265', crf: '24' });
+                }}><Archive size={12}/> Archival MKV</button>
+              </div>
+            </>
             ) : (
-               <div className="parsed-media-info" style={{ padding: '16px', fontSize: '0.78rem', flex: 1, overflowY: 'auto' }}>
-                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                   {mediaInfo.format_name && <div style={{gridColumn: '1 / -1'}}><strong>Format:</strong> {mediaInfo.format_name.split(',')[0]}</div>}
-                     {mediaInfo.duration && (
-                       <div>
-                         <strong>Duration:</strong>{' '}
-                         {mediaInfo.duration >= 3600
-                           ? `${Math.floor(mediaInfo.duration / 3600)}h ${Math.floor((mediaInfo.duration % 3600) / 60)}m`
-                           : mediaInfo.duration >= 60
-                             ? `${Math.floor(mediaInfo.duration / 60)}m ${Math.round(mediaInfo.duration % 60)}s`
-                             : `${Math.round(mediaInfo.duration)}s`}
-                       </div>
-                     )}
-                   {mediaInfo.size_mb && <div><strong>Size:</strong> {mediaInfo.size_mb} MB</div>}
-                   {mediaInfo.bitrate_kbps && <div><strong>Bitrate:</strong> {mediaInfo.bitrate_kbps} kbps</div>}
-                   
-                   {mediaInfo.video_codec && (
-                     <>
-                       <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Video Stream</strong></div>
-                       <div><strong>Codec:</strong> {mediaInfo.video_codec.toUpperCase()}</div>
-                       {mediaInfo.width && <div><strong>Res:</strong> {mediaInfo.width}x{mediaInfo.height}</div>}
-                       {mediaInfo.fps && <div><strong>FPS:</strong> {Math.round(mediaInfo.fps)}</div>}
-                     </>
-                   )}
-                   
-                   {mediaInfo.audio_codec && (
-                     <>
-                       <div style={{ gridColumn: '1 / -1', marginTop: '4px', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px', opacity: 0.7 }}><strong>Audio Stream</strong></div>
-                       <div><strong>Codec:</strong> {mediaInfo.audio_codec.toUpperCase()}</div>
-                       {mediaInfo.sample_rate && <div><strong>Sample Rate:</strong> {mediaInfo.sample_rate} Hz</div>}
-                       {mediaInfo.channels && <div><strong>Channels:</strong> {mediaInfo.channels === 2 ? 'Stereo' : (mediaInfo.channels === 1 ? 'Mono' : mediaInfo.channels)}</div>}
-                     </>
-                   )}
-                 </div>
-               </div>
+            <>
+              <span className="presets-label" style={{ marginBottom: '8px', opacity: 0.6 }}>Audio Presets</span>
+              <div className="presets-group" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                  setActiveTab('format');
+                  handleUpdate({ mode: 'audio', fmt: 'mp3', ab: '320k' });
+                }}><Music size={12}/> HQ MP3</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                   setActiveTab('format');
+                   handleUpdate({ mode: 'audio', fmt: 'm4a', ac: 'aac', ab: '256k' });
+                }}><Music size={12}/> Apple AAC</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                   setActiveTab('format');
+                   handleUpdate({ mode: 'audio', fmt: 'ogg', ac: 'libopus', ab: '64k' });
+                }}><Music size={12}/> Voice (Opus)</button>
+                <button className="preset-btn" style={{ justifyContent: 'center' }} onClick={() => {
+                   setActiveTab('format');
+                   handleUpdate({ mode: 'audio', fmt: 'wav', ac: 'pcm_s16le' });    
+                }}><Music size={12}/> Lossless WAV</button>
+              </div>
+            </>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* ── Sub Mode Bar ── */}
-      {activeMode === 'video' && (
-      <div className="mode-bar">
-        <button 
-          className={`mode-btn ${options.mode === 'convert' ? 'active' : ''}`} 
-          onClick={() => { handleUpdate({ mode: 'convert' }); setActiveTab('format'); }}
-        >
-          <Film size={14} /> Normal
-        </button>
-        <button 
-          className={`mode-btn ${options.mode === 'remux' ? 'active' : ''}`} 
-          onClick={() => { handleUpdate({ mode: 'remux' }); setActiveTab('format'); }}
-        >
-          <Package size={14} /> Remux
-        </button>
-        <button 
-          className={`mode-btn ${options.mode === 'thumbnail' ? 'active' : ''}`} 
-          onClick={() => { handleUpdate({ mode: 'thumbnail' }); setActiveTab('format'); }}
-        >
-          <ImageIcon size={14} /> Thumbnail
-        </button>
-        <button 
-          className={`mode-btn ${options.mode === 'merge' ? 'active' : ''}`} 
-          onClick={() => { handleUpdate({ mode: 'merge' }); setActiveTab('format'); }}
-        >
-          <Layers size={14} /> Merge
-        </button>
-      </div>
-      )}
-
-      {/* ── Presets Bar ── */}
-      <div className="presets-bar">
-        {activeMode === 'video' ? (
-        <>
-          <span className="presets-label">Quick Presets</span>
-          <div className="presets-group">
-            <button className="preset-btn" onClick={() => {
-              setActiveTab('format');
-              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '23' });
-            }}><Film size={12}/> TikTok / IG</button>
-            <button className="preset-btn" onClick={() => {
-              setActiveTab('format');
-              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '20' });
-            }}><Film size={12}/> YouTube</button>
-            <button className="preset-btn" onClick={() => {
-              setActiveTab('format');
-              handleUpdate({ mode: 'convert', fmt: 'mp4', vc: 'libx264', crf: '32' });
-            }}><Film size={12}/> Discord &lt;8MB</button>
-            <button className="preset-btn" onClick={() => {
-               setActiveTab('format');
-               handleUpdate({ mode: 'convert', fmt: 'mkv', vc: 'libx265', crf: '24' });
-            }}><Archive size={12}/> Archival MKV</button>
-          </div>
-        </>
-        ) : (
-        <>
-          <span className="presets-label">Audio Presets</span>
-          <div className="presets-group">
-            <button className="preset-btn" onClick={() => {
-              setActiveTab('format');
-              handleUpdate({ mode: 'audio', fmt: 'mp3', ab: '320k' });
-            }}><Music size={12}/> HQ MP3</button>
-            <button className="preset-btn" onClick={() => {
-               setActiveTab('format');
-               handleUpdate({ mode: 'audio', fmt: 'm4a', ac: 'aac', ab: '256k' });
-            }}><Music size={12}/> Apple AAC</button>
-            <button className="preset-btn" onClick={() => {
-               setActiveTab('format');
-               handleUpdate({ mode: 'audio', fmt: 'ogg', ac: 'libopus', ab: '64k' });
-            }}><Music size={12}/> Voice (Opus)</button>
-            <button className="preset-btn" onClick={() => {
-               setActiveTab('format');
-               handleUpdate({ mode: 'audio', fmt: 'wav', ac: 'pcm_s16le' });
-            }}><Music size={12}/> Lossless WAV</button>
-          </div>
-        </>
-        )}
-      </div>
-
-      {/* ── Settings Container ── */}
-      <div id="settings-container" style={{ marginTop: '14px' }}>
-        <div className="settings-tabs">
-          <button className={`tab-btn ${activeTab === 'format' ? 'active' : ''}`} onClick={() => setActiveTab('format')}>Output Format</button>
-          
-          {(activeMode === 'video' && ['convert', 'remux'].includes(options.mode)) && (
-             <button className={`tab-btn ${activeTab === 'quality' ? 'active' : ''}`} onClick={() => setActiveTab('quality')}>Quality</button>
-          )}
-          
-          {(activeMode === 'video' && options.mode === 'convert') && (
-             <button className={`tab-btn ${activeTab === 'filters' ? 'active' : ''}`} onClick={() => setActiveTab('filters')}>Filters</button>
-          )}
-
-          {(options.mode === 'convert' || options.mode === 'audio') && (
-             <button className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`} onClick={() => setActiveTab('audio')}>Audio</button>
-          )}
-          
-          {(activeMode === 'video' && options.mode === 'convert') && (
-             <button className={`tab-btn ${activeTab === 'advanced' ? 'active' : ''}`} onClick={() => setActiveTab('advanced')}>Advanced</button>
-          )}
-        </div>
-
-        <div className="settings-panel">
-          {options.mode === 'remux' && activeTab === 'format' && (
-             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
-                 <Package size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
-                 <h4 style={{ margin: '0 0 6px 0' }}>Remux Mode</h4>
-                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Quickly change the container format without re-encoding video or audio.<br/>Select the output format below.</p>
-             </div>
-          )}
-          {options.mode === 'thumbnail' && activeTab === 'format' && (
-             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
-                 <ImageIcon size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
-                 <h4 style={{ margin: '0 0 6px 0' }}>Thumbnail Mode</h4>
-                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Extracts a single image frame from the video at 00:00:05.<br/>Select the output format below (e.g. JPG).</p>
-             </div>
-          )}
-          {options.mode === 'merge' && activeTab === 'format' && (
-             <div className="sg" style={{ padding: '20px', textAlign: 'center', opacity: 0.8, borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
-                 <Layers size={24} style={{ opacity: 0.5, marginBottom: '6px' }} />
-                 <h4 style={{ margin: '0 0 6px 0' }}>Merge Mode</h4>
-                 <p style={{ margin: 0, fontSize: '0.85rem' }}>Concatenates multiple files from the queue in order.<br/>Ensure all inputs share the same resolution and codecs for best results.</p>
-             </div>
-          )}
-          {activeTab === 'format' && (
-            <>
-              <div className="sg">
-                <span className="sg-label">Container/Format</span>
-                <div className="sg-row">
-                  <div className="sg-field" style={{ maxWidth: '220px' }}>      
-                    <select value={options.fmt || (activeMode === 'audio' ? 'mp3' : 'mp4')} onChange={(e) => handleUpdate({ fmt: e.target.value })}>
-                      {options.mode === 'thumbnail' ? (
-                        <>
-                          <option value="jpg">JPG — Standard</option>
-                          <option value="png">PNG — Lossless</option>
-                          <option value="webp">WebP</option>
-                        </>
-                      ) : activeMode === 'audio' ? (
-                        <>
-                          <option value="mp3">MP3 — Compressed</option>
-                          <option value="wav">WAV — Lossless</option>
-                          <option value="ogg">Ogg / Opus</option>
-                          <option value="m4a">M4A (AAC)</option>
-                          <option value="flac">FLAC — Lossless compressed</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="mp4">MP4 — Universal</option>
-                          <option value="mkv">MKV — Archival</option>
-                          <option value="webm">WebM — Open Web</option>
-                          <option value="mov">MOV — Apple / Edit</option>       
-                        </>
-                      )}
-                    </select>
-                  </div>
-                  {activeMode === 'video' && options.mode !== 'thumbnail' && (
-                  <label className="chk-label web-optimize-wrap">
-                    <input type="checkbox" checked={true} readOnly /> Web Optimize (faststart, MP4 only)
-                  </label>
-                  )}
-                </div>
-              </div>
-
-              {options.mode === 'convert' && (
-              <div className="sg">
-                <span className="sg-label">Video Engine</span>
-                <div className="codec-group">
-                  <label className={`codec-item ${options.vc === 'libx264' || !options.vc ? 'active' : ''}`}>
-                    <input type="radio" name="vcodec" checked={options.vc === 'libx264' || !options.vc} onChange={() => handleUpdate({ vc: 'libx264' })} />     
-                    <div>
-                      <div className="ci-label">Standard (Most Compatible)</div>
-                      <div className="ci-desc">H.264 — plays on 99% of devices</div>
-                    </div>
-                    <span className="cap-badge" style={{ marginLeft: 'auto' }}>Available</span>
-                  </label>
-                  <label className={`codec-item ${options.vc === 'libx265' ? 'active' : ''}`}>
-                    <input type="radio" name="vcodec" checked={options.vc === 'libx265'} onChange={() => handleUpdate({ vc: 'libx265' })} />
-                    <div>
-                      <div className="ci-label">High Efficiency (Modern)</div>  
-                      <div className="ci-desc">H.265 — ~50% smaller than H.264</div>
-                    </div>
-                    <span className="cap-badge" style={{ marginLeft: 'auto' }}>Available</span>
-                  </label>
-                </div>
-              </div>
+          <div id="settings-container" style={{ margin: 0, flex: 1 }}>
+            <div className="settings-tabs">
+              <button className={`tab-btn ${activeTab === 'format' ? 'active' : ''}`} onClick={() => setActiveTab('format')}>Format</button>
+              {(activeMode === 'video' && ['convert', 'remux'].includes(options.mode)) && (
+                 <button className={`tab-btn ${activeTab === 'quality' ? 'active' : ''}`} onClick={() => setActiveTab('quality')}>Quality</button>
               )}
-            </>
-          )}
+              {(activeMode === 'video' && options.mode === 'convert') && (
+                 <button className={`tab-btn ${activeTab === 'filters' ? 'active' : ''}`} onClick={() => setActiveTab('filters')}>Filters</button>
+              )}
+              {(options.mode === 'convert' || options.mode === 'audio') && (        
+                 <button className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`} onClick={() => setActiveTab('audio')}>Audio</button>
+              )}
+              {(activeMode === 'video' && options.mode === 'convert') && (
+                 <button className={`tab-btn ${activeTab === 'advanced' ? 'active' : ''}`} onClick={() => setActiveTab('advanced')}>Adv.</button>
+              )}
+            </div>
 
-          {activeTab === 'quality' && (
-             <div className="settings-panel">
-               <div className="sg">
-                 <span className="sg-label">Quality (CRF) — lower value = higher quality</span>
-                 <div className="range-wrap">
-                   <span className="range-lbl">28<br/><span style={{fontSize:'.6rem',opacity:.6}}>Small</span></span>
-                   <input type="range" min="0" max="51" value={options.crf || '23'} onChange={(e) => handleUpdate({ crf: e.target.value })} />
-                   <span className="range-lbl">18<br/><span style={{fontSize:'.6rem',opacity:.6}}>High</span></span>
-                 </div>
-                 <p style={{fontSize:'.71rem',color:'var(--text-2)',marginTop:'6px'}}>CRF: <strong>{options.crf || '23'}</strong> (default 23)</p>
-               </div>
-
-               <div className="sg sg-row">
-                 <div className="sg-field">
-                   <label className="sg-label">Video Bitrate (kbps) — overrides CRF</label>
-                   <input type="number" placeholder="e.g. 4000 (optional)" value={options.vbr || ''} onChange={(e) => handleUpdate({ vbr: e.target.value })} />
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Audio Bitrate</label>
-                   <select value={options.ab || '128k'} onChange={(e) => handleUpdate({ ab: e.target.value })}>
-                     <option value="64k">64 kbps</option>
-                     <option value="128k">128 kbps</option>
-                     <option value="192k">192 kbps</option>
-                     <option value="256k">256 kbps</option>
-                     <option value="320k">320 kbps (Max)</option>
-                   </select>
-                 </div>
-               </div>
-
-               <div className="sg sg-row">
-                 <div className="sg-field">
-                   <label className="sg-label">Resolution</label>
-                   <select value={options.res || 'original'} onChange={(e) => handleUpdate({ res: e.target.value })}>
-                     <option value="original">Original (no change)</option>
-                     <option value="4k">4K (3840 px)</option>
-                     <option value="1080p">1080p</option>
-                     <option value="720p">720p</option>
-                     <option value="480p">480p</option>
-                     <option value="360p">360p</option>
-                   </select>
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Target File Size (MB) — triggers 2-pass</label>
-                   <input type="number" placeholder="e.g. 50 (optional)" value={options.tsz || ''} onChange={(e) => handleUpdate({ tsz: e.target.value })} />
-                 </div>
-               </div>
-             </div>
-          )}
-          {activeTab === 'filters' && (
-             <div className="settings-panel">
-               <div className="sg">
-                 <span className="sg-label">Visual Trim</span>
-                 <div className="sg-row" style={{ marginTop: '10px' }}>
-                   <div className="sg-field">
-                     <label className="sg-label">Start Time</label>
-                     <input type="text" placeholder="HH:MM:SS (blank = from start)" value={options.ts_start || ''} onChange={(e) => handleUpdate({ ts_start: e.target.value })} />
-                   </div>
-                   <div className="sg-field">
-                     <label className="sg-label">End Time</label>
-                     <input type="text" placeholder="HH:MM:SS (blank = to end)" value={options.ts_end || ''} onChange={(e) => handleUpdate({ ts_end: e.target.value })} />
-                   </div>
-                 </div>
-               </div>
-
-               <div className="sg">
-                 <span className="sg-label">Speed</span>
-                 <div className="speed-group">
-                   {[0.25, 0.5, 1, 1.5, 2].map(s => (
-                     <button key={s} className={`speed-btn ${options.speed === s || (!options.speed && s === 1) ? 'active' : ''}`} onClick={() => handleUpdate({ speed: s })}>
-                       {s}×
-                     </button>
-                   ))}
-                 </div>
-               </div>
-
-               <div className="sg">
-                 <span className="sg-label">Video Filters</span>
-                 <div className="check-group">
-                   <label className="chk-label"><input type="checkbox" checked={options.deint || false} onChange={(e) => handleUpdate({ deint: e.target.checked })} /> Deinterlace (yadif)</label>
-                   <label className="chk-label"><input type="checkbox" checked={options.gray || false} onChange={(e) => handleUpdate({ gray: e.target.checked })} /> Grayscale</label>
-                   <label className="chk-label"><input type="checkbox" checked={options.den || false} onChange={(e) => handleUpdate({ den: e.target.checked })} /> Denoise</label>
-                   <label className="chk-label"><input type="checkbox" checked={options.sharp || false} onChange={(e) => handleUpdate({ sharp: e.target.checked })} /> Sharpen</label>
-                 </div>
-               </div>
-             </div>
-          )}
-          {activeTab === 'audio' && (
-             <div className="settings-panel">
-               <div className="sg sg-row">
-                 <div className="sg-field">
-                   <label className="sg-label">Audio Codec</label>
-                   <select value={options.ac || 'aac'} onChange={(e) => handleUpdate({ ac: e.target.value })}>
-                     <option value="aac">AAC (default)</option>
-                     <option value="libmp3lame">MP3</option>
-                     <option value="libopus">Opus</option>
-                     <option value="flac">FLAC (lossless)</option>
-                     <option value="copy">Copy (passthrough)</option>
-                   </select>
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Sample Rate</label>
-                   <select value={options.sr || ''} onChange={(e) => handleUpdate({ sr: e.target.value })}>
-                     <option value="">Original</option>
-                     <option value="22050">22050 Hz</option>
-                     <option value="44100">44100 Hz (CD)</option>
-                     <option value="48000">48000 Hz (DVD)</option>
-                   </select>
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Channels</label>
-                   <select value={options.ch || ''} onChange={(e) => handleUpdate({ ch: e.target.value })}>
-                     <option value="">Original</option>
-                     <option value="1">Mono</option>
-                     <option value="2">Stereo</option>
-                     <option value="6">5.1 Surround</option>
-                   </select>
-                 </div>
-               </div>
-
-               <div className="sg">
-                 <label className="sg-label">Volume — <span>{Math.round((options.vol ?? 1) * 100)}%</span></label>
-                 <div className="range-wrap">
-                   <span className="range-lbl">0%</span>
-                   <input type="range" min="0" max="3" step="0.05" value={options.vol ?? 1.0} onChange={(e) => handleUpdate({ vol: parseFloat(e.target.value) })} />
-                   <span className="range-lbl">300%</span>
-                 </div>
-               </div>
-
-               <div className="sg">
-                 <div className="check-group">
-                   <label className="chk-label"><input type="checkbox" checked={options.norm || false} onChange={(e) => handleUpdate({ norm: e.target.checked })} /> Normalize Loudness (loudnorm)</label>
-                   <label className="chk-label"><input type="checkbox" checked={options.noAudio || false} onChange={(e) => handleUpdate({ noAudio: e.target.checked })} /> Remove Audio (-an)</label>
-                 </div>
-               </div>
-             </div>
-          )}
-          {activeTab === 'advanced' && (
-             <div className="settings-panel">
-               <div className="sg sg-row">
-                 <div className="sg-field">
-                   <label className="sg-label">Encoding Speed (Preset)</label>
-                   <select value={options.preset || 'medium'} onChange={(e) => handleUpdate({ preset: e.target.value })}>
-                     <option value="veryslow">Very Slow (best quality)</option>
-                     <option value="slow">Slow</option>
-                     <option value="medium">Medium (balanced)</option>
-                     <option value="fast">Fast</option>
-                     <option value="ultrafast">Ultra Fast</option>
-                   </select>
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Frame Rate</label>
-                   <select value={options.fps || ''} onChange={(e) => handleUpdate({ fps: e.target.value })}>
-                     <option value="">Original</option>
-                     <option value="24">24</option>
-                     <option value="30">30</option>
-                     <option value="60">60</option>
-                   </select>
-                 </div>
-                 <div className="sg-field">
-                   <label className="sg-label">Pixel Format</label>
-                   <select value={options.pixFmt || 'yuv420p'} onChange={(e) => handleUpdate({ pixFmt: e.target.value })}>
-                     <option value="yuv420p">yuv420p (most compatible)</option>
-                     <option value="yuv422p">yuv422p</option>
-                     <option value="yuv444p">yuv444p</option>
-                   </select>
-                 </div>
-               </div>
-
-               <div className="sg">
-                 <div className="check-group">
-                   <label className="chk-label"><input type="checkbox" checked={options.noMeta || false} onChange={(e) => handleUpdate({ noMeta: e.target.checked })} /> Strip all metadata</label>
-                 </div>
-               </div>
-               
-               <div className="sg">
-                 <label className="sg-label">Custom FFmpeg Arguments</label>
-                 <input type="text" placeholder='-vf eq=brightness=0.1' value={options.custom || ''} onChange={(e) => handleUpdate({ custom: e.target.value })} />
-               </div>
-             </div>
-          )}
+            <div className="settings-panel">
+}        </div>
+          </div>
         </div>
-      </div>
-
-      {/* ── Action Bar ── */}
-      <div id="action-bar" className="action-bar">
-        {isProcessing && (
-           <button className="btn btn-secondary btn-lg" onClick={onCancel}>
-             <StopCircle size={16} /> Cancel
-           </button>
-        )}
-        <button id="convert-btn" className="btn btn-primary btn-lg" onClick={() => onExecute(options, activeItem, queue)} disabled={isProcessing || queue.length === 0}>
-          <Play size={16} /> {isProcessing ? "Processing..." : "Convert"}
-        </button>
-      </div>
-
-      {/* ── Progress / Terminal Logs ── */}
-      <div style={{ marginTop: '20px' }}>
-        <TerminalOutput logs={terminalLogs} title="FFmpeg Log" />
-      </div>
-      
+        <div className="sidebar-footer">
+          {isProcessing && (
+             <button className="btn btn-secondary" style={{ width: '100%', padding: '10px' }} onClick={onCancel}>     
+               <StopCircle size={16} /> Stop Task
+             </button>
+          )}
+          <button 
+            id="convert-btn" 
+            className="btn btn-primary" 
+            style={{ width: '100%', padding: '12px' }} 
+            onClick={() => onExecute(options, activeItem, queue)} 
+            disabled={isProcessing || queue.length === 0}
+          >
+            <Play size={16} /> {isProcessing ? "Processing..." : "Convert"}
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }
