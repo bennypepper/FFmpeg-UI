@@ -20,8 +20,8 @@
 .value {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.1);
+  color: var(--bg-dark);
+  background: var(--accent-primary);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
 }
@@ -44,10 +44,10 @@
   background: var(--accent-primary);
   cursor: pointer;
   transition: all var(--transition-fast);
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 .input::-webkit-slider-thumb:hover {
   transform: scale(1.2);
-  background: #8b5cf6;
+  background: #ffffff;
 }

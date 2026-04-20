@@ -41,6 +41,7 @@ export default function App() {
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDone, setIsDone] = useState(false);
   const currentJobId = useRef<string | null>(null);
   const unlisteners = useRef<UnlistenFn[]>([]);
 
@@ -82,8 +83,15 @@ export default function App() {
           ? `[${e.payload.level.toUpperCase()}]`
           : `[${e.payload.level}]`;
         addLog(`${prefix} ${e.payload.message}`);
-        if (e.payload.level === 'done' || e.payload.level === 'error') {
+        
+        if (e.payload.level === 'done') {
           setIsProcessing(false);
+          setIsDone(true);
+          currentJobId.current = null;
+          setProgress(null);
+        } else if (e.payload.level === 'error') {
+          setIsProcessing(false);
+          setIsDone(false);
           currentJobId.current = null;
           setProgress(null);
         }
@@ -168,6 +176,7 @@ export default function App() {
     const jobId = makeJobId();
     currentJobId.current = jobId;
     setIsProcessing(true);
+    setIsDone(false);
     setProgress(null);
 
     // Derive output path: same folder, suffixed name
@@ -258,7 +267,7 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Encoding Settings</h3>
               <button
-                onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); }}
+                onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); setIsDone(false); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.1rem' }}
                 title="Clear file"
               >✕</button>
@@ -370,14 +379,31 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>
+            {/* Success state */}
+            {isDone && !isProcessing && (
+              <div style={{
+                padding: '0.8rem',
+                background: 'rgba(22, 163, 74, 0.1)',
+                border: '1px solid rgba(22, 163, 74, 0.3)',
+                color: 'var(--success)',
+                borderRadius: 'var(--radius-sm)',
+                textAlign: 'center',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                marginTop: 'auto'
+              }}>
+                ✅ Encoding Complete!
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: isDone && !isProcessing ? '0.5rem' : 'auto' }}>
               {isProcessing ? (
                 <Button fullWidth variant="ghost" onClick={handleCancel}>
                   ⏹ Cancel
                 </Button>
               ) : (
                 <>
-                  <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); }}>
+                  <Button variant="ghost" onClick={() => { setFilePath(null); setFileName(''); setMediaInfo(null); setTerminalLogs([]); setIsDone(false); }}>
                     Clear
                   </Button>
                   <Button
@@ -385,7 +411,7 @@ export default function App() {
                     onClick={handleExecute}
                     disabled={!capabilities?.has_ffmpeg}
                   >
-                    {capabilities?.has_ffmpeg ? '▶ Start Encode' : '⚠ FFmpeg Not Found'}
+                    {capabilities?.has_ffmpeg ? (isDone ? '🔄 Convert Again' : '▶ Start Encode') : '⚠ FFmpeg Not Found'}
                   </Button>
                 </>
               )}

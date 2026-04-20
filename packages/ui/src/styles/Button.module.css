@@ -21,9 +21,9 @@
 
 /* Variants */
 .primary {
-  background: var(--accent-gradient);
-  color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+  background: var(--accent-primary);
+  color: var(--accent-primary-fg);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
 }
 
 .primary:hover:not(:disabled) {
