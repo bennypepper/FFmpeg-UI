@@ -256,11 +256,22 @@ export function MediaEditor(props: MediaEditorProps) {
                 <span className="sg-label">Container</span>
                 <div className="sg-row">
                   <div className="sg-field" style={{ maxWidth: '220px' }}>
-                    <select value={options.fmt || 'mp4'} onChange={(e) => handleUpdate({ fmt: e.target.value })}>
-                      <option value="mp4">MP4 — Universal</option>
-                      <option value="mkv">MKV — Archival</option>
-                      <option value="webm">WebM — Open Web</option>
-                      <option value="mov">MOV — Apple / Edit</option>
+                    <select value={options.fmt || (options.mode === 'audio' ? 'mp3' : 'mp4')} onChange={(e) => handleUpdate({ fmt: e.target.value })}>
+                      {options.mode === 'audio' ? (
+                        <>
+                          <option value="mp3">MP3 — Compressed</option>
+                          <option value="wav">WAV — Lossless</option>
+                          <option value="flac">FLAC — Lossless compressed</option>
+                          <option value="aac">AAC — Apple</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="mp4">MP4 — Universal</option>
+                          <option value="mkv">MKV — Archival</option>
+                          <option value="webm">WebM — Open Web</option>
+                          <option value="mov">MOV — Apple / Edit</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <label className="chk-label web-optimize-wrap">
