@@ -1,121 +1,124 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { Button, Dropzone, Select, Slider, TerminalOutput } from '@ffmpeg-ui/ui';
+import { buildFFmpegArgs, CommandOptions } from '@ffmpeg-ui/core';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [capabilities, setCapabilities] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  
+  // FFmpeg config state
+  const [options, setOptions] = useState<CommandOptions>({
+    mode: 'convert',
+    input: '',
+    fmt: 'mp4',
+    vc: 'libx264',
+    ac: 'aac',
+    crf: '23',
+  });
+
+  useEffect(() => {
+    // Check Tauri Rust backend for capabilities
+    invoke('get_capabilities').then(res => {
+        setCapabilities(res);
+        setTerminalLogs(prev => [...prev, `[System] FFmpeg Version: ${(res as any).version}`]);
+    }).catch(err => {
+      setTerminalLogs(prev => [...prev, `[Error] ${err}`]);
+    });
+  }, []);
+
+  // Whenever file or options change, calculate the preview command using the Core Builder
+  useEffect(() => {
+    if (file) {
+      // Create a dummy options object with the filename logic 
+      const testArgs = buildFFmpegArgs({ ...options, input: file.name });
+      const rawCommand = `ffmpeg ${testArgs.join(' ')}`;
+      setTerminalLogs([`[Preview Generation]:`, rawCommand]);
+    }
+  }, [options, file]);
+
+  const handleFileDrop = (selectedFile: File) => {
+    setFile(selectedFile);
+    setTerminalLogs(prev => [...prev, `[Loaded] ${selectedFile.name}`]);
+  };
+
+  const handleUpdate = (key: keyof CommandOptions, value: any) => {
+    setOptions(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleExecute = async () => {
+    if (!file) return;
+    setTerminalLogs(prev => [...prev, `[Processing] Starting FFmpeg process natively...`]);
+    // NOTE: This will eventually be attached to invoke('start_convert')
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <h1>FFmpeg UI <span style={{ color: 'var(--accent-primary)', fontSize: '0.5em', verticalAlign: 'middle' }}>TAURI NATIVE</span></h1>
+      
+      {!file && (
+        <Dropzone onFileSelect={handleFileDrop} accept="video/*, audio/*" />
+      )}
 
-      <div className="ticks"></div>
+      {file && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2rem' }}>
+          {/* Settings Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3>Video Settings</h3>
+            
+            <Select 
+              label="Processing Mode"
+              value={options.mode}
+              onChange={e => handleUpdate('mode', e.target.value)}
+              options={[
+                { label: 'Standard Convert', value: 'convert' },
+                { label: 'Audio Extract', value: 'audio' },
+                { label: 'Hardware Remux', value: 'remux' }
+              ]} 
+            />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            <Select 
+              label="Output Format"
+              value={options.fmt}
+              onChange={e => handleUpdate('fmt', e.target.value)}
+              options={[
+                { label: 'MP4', value: 'mp4' },
+                { label: 'MKV', value: 'mkv' },
+                { label: 'WEBM', value: 'webm' }
+              ]} 
+            />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            <Select 
+              label="Video Codec"
+              value={options.vc}
+              onChange={e => handleUpdate('vc', e.target.value)}
+              options={[
+                { label: 'H.264 (Software)', value: 'libx264' },
+                { label: 'H.265 (HEVC)', value: 'libx265' },
+                { label: 'Copy (Pass-through)', value: 'copy' }
+              ]} 
+            />
+
+            <Slider 
+              label="Quality (CRF)" 
+              min="0" max="51" 
+              value={options.crf} 
+              onChange={e => handleUpdate('crf', e.target.value)}
+            />
+          </div>
+
+          /* Execution Column */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', gridColumn: 'span 2' }}>
+            <TerminalOutput logs={terminalLogs} title="FFmpeg Pipeline" />
+            
+            <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>
+              <Button variant="ghost" onClick={() => setFile(null)}>Clear File</Button>
+              <Button fullWidth onClick={handleExecute} disabled={!capabilities?.has_ffmpeg}>Start Encode</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
-
-export default App
