@@ -1,47 +1,55 @@
-# FFmpeg Web UI Converter 
+# FFmpeg UI — The Next Generation
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![Flask](https://img.shields.io/badge/Flask-2.0+-lightgrey.svg) ![FFmpeg](https://img.shields.io/badge/FFmpeg-Ready-green.svg) ![LocalFirst](https://img.shields.io/badge/LocalFirst-Enabled-blue.svg)
+> **A beautifully designed, self-hosted frontend for FFmpeg that handles complex media encoding visually. No CLI memorization required.**
 
-A minimalist, self-hosted web interface for FFmpeg that allows you to manage advanced video and audio encoding completely offline. Process your multimedia files securely in your local browser without ever uploading anything to a cloud server. 
+*This project is currently migrating from a simple Python script to a Monorepo Architecture.*
 
-## 📌 Project Overview
-This tool bridges the gap between the powerful FFmpeg command-line utility and everyday users. It features an ultra-clean frontend that communicates with a lightweight Python Flask backend. The server executes FFmpeg locally via Python's `subprocess` module to process your files securely, rapidly, and privately.
+## Ecosystem / Platforms
 
-## 🛠️ Tech Stack & Tools
-* **Frontend:** Vanilla JavaScript, CSS Glassmorphism, Inline SVGs (No external dependencies)
-* **Backend:** Python, Flask, Server-Sent Events (SSE)
-* **Media Engine:** FFmpeg & FFprobe
-* **Automation:** Cross-platform scripts (`.bat` and `.sh`)
+The project is structured to deploy to three distinct environments, all sharing the same visual UI, but relying on uniquely suited backend engines:
 
-## 🚀 Key Features
-* **Dual Processing Modes:** A master toggle provides a bespoke, uncluttered interface for either Video encoding or purely Audio conversion.
-* **Batch Processing Queue:** Drag-and-drop multiple files to build a robust rendering queue with drag-to-reorder prioritization and batch ZIP downloading.
-* **Advanced Video Tooling:** Hardware-accelerated (NVENC/QSV) video encoding, smart remuxing, target-size bitrate targeting, and automated watermark integrations.
-* **Visual Add-ons:** Dedicated tools to extract high-quality Thumbnails or Merge multiple video files natively.
-* **Real-time Diagnostics:** Monitor detailed, live encoding metrics (FPS, ETA, Size) via reliable Server-Sent Events (SSE) tracking real FFmpeg output.
-* **Cross-Platform Installer:** Out-of-the-box automated configuration scripts for Windows, macOS, and Linux users.
+1. **Desktop Native (Tauri):** Fast, installable `.exe` / `.dmg` applications that bundle FFmpeg directly. Accesses your file system natively. *(Under active development).*
+2. **WebAssembly (WASM):** Client-side `.mp4` and `.gif` conversions run entirely inside your browser tab without uploading files to a server. Zero computational cost.
+3. **Local Server (Python Legacy):** The original self-hosted Python (Flask) API for remote conversion on NAS systems and home servers.
 
-## 📂 Repository Structure
+## Monorepo Architecture
+
+This project is managed via **Turborepo** and npm workspaces.
+
 ```text
-ffmpeg-web-ui/
-├── install_dependencies.*    # Cross-platform installers (Chocolatey/Homebrew/Apt)
-├── start_converter.*         # One-click script to launch the server and UI 
-├── server.py                 # The Python Flask backend that connects to FFmpeg
-├── static/                   # Modularized vanilla JS scripts and modern CSS
-├── index.html                # The minimalist, robust frontend application
-└── README.md
+FFmpeg-UI/
+├── apps/
+│   ├── desktop/            # Tauri + React (Native app wrapper)
+│   ├── wasm-web/           # Vite + React (WebAssembly browser app)
+│   └── local-server/       # Legacy Python APIs + Original Implementation
+├── docs/                   
+│   ├── ARCHITECTURE_PRD.md # Detailed migration plan and engineering notes
+│   └── reference/          # Old PRDs
+├── packages/
+│   ├── core/               # Pure logic: Typescript FFmpeg Command Builders 
+│   └── ui/                 # Beautiful, Reusable React Components (CSS Modules)
 ```
 
-## 💻 How to Run Locally
+## Getting Started (Development Environment)
 
-### Windows
-1. Right-click `install_dependencies.bat` and select **"Run as administrator"**. This installs Python, FFmpeg, and Flask via Chocolatey automatically.
-2. Double-click `start_converter.bat` to launch the server. Your web browser will automatically open the UI.
+*Ensure you have `Node.js 18+` and `npm` installed.*
 
-### macOS & Linux
-1. Open up your terminal in this directory.
-2. Run `bash install_dependencies.sh`. This automatically queries your OS package manager (`brew`, `apt`, `dnf`, or `pacman`) to install Python and FFmpeg.
-3. Launch the environment by running `bash start_converter.sh`. 
+```bash
+# 1. Install all dependencies across the workspace
+npm install
 
-## 📝 License
-This project is licensed under the MIT License.
+# 2. Run the development environment across all applications
+npm run dev
+```
+
+> ⚠️ Note: The Desktop `Tauri` app requires Rust and system-specific build tools. See the [Tauri Prerequisites Guide](https://v2.tauri.app/start/prerequisites/).
+
+## Development Rules
+
+1. **Strict Typescript:** All internal package logic is typed.
+2. **Separation of Concerns:** `packages/core` handles logic string building. `packages/ui` handles exclusively the React styling. The Apps glue them together.
+3. **No External CSS Frameworks:** We rely on premium Vanilla CSS Modules mapped with bespoke CSS variables to ensure strict styling uniqueness and zero-friction packaging.
+
+## License
+
+MIT
