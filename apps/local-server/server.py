@@ -12,7 +12,7 @@ from flask import Flask, request, send_file, jsonify, Response, stream_with_cont
 from flask_cors import CORS
 
 BASE_DIR = Path(__file__).parent
-app = Flask(__name__, static_folder=str(BASE_DIR / 'static'))
+app = Flask(__name__, static_folder=str(BASE_DIR.parent / 'local-server-web' / 'dist'), static_url_path='/')
 CORS(app)
 
 UPLOAD_DIR = BASE_DIR / 'uploads'
@@ -103,7 +103,7 @@ def _check_capabilities() -> dict:
         ver_r = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, **_popen_kwargs())
         m = re.search(r'ffmpeg version (\S+)', ver_r.stdout)
         if m:
-            caps['ffmpeg_version'] = m.group(1)
+            caps['ffmpeg_version'] = m.group(1).split('-')[0].strip()
     except Exception as e:
         print(f'[caps encoder error] {e}')
     try:
@@ -470,11 +470,17 @@ def _run_job(job_id: str, cmd: list, out_path: Path, duration: float):
 # ── Routes ───────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
-    return send_from_directory(BASE_DIR, 'index.html')
+    return send_from_directory(app.static_folder, 'index.html')
+
+def check_caps_for_client():
+    return {
+        'has_ffmpeg': CAPABILITIES.get('ffprobe_available', False),
+        'version': CAPABILITIES.get('ffmpeg_version', 'Unknown')
+    }
 
 @app.route('/capabilities')
 def capabilities():
-    return jsonify(CAPABILITIES)
+    return jsonify(check_caps_for_client())
 
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):

@@ -14,5 +14,9 @@
   ],
   "devDependencies": {
     "turbo": "^1.13.0"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
+    "lucide-react": "^1.8.0"
   }
 }

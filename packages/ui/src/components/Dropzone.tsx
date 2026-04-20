@@ -1,4 +1,5 @@
-import React, { useRef, useState, DragEvent, ChangeEvent } from 'react';
+import React, { useRef, useState } from 'react';
+import type { DragEvent, ChangeEvent } from 'react';
 import styles from '../styles/Dropzone.module.css';
 
 export interface DropzoneProps {

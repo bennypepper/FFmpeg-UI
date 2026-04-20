@@ -1,121 +1,155 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useRef, useEffect } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
+import { MediaEditor } from '@ffmpeg-ui/ui';
+import type { MediaItem } from '@ffmpeg-ui/ui';
+import { buildFFmpegArgs } from '@ffmpeg-ui/core';
+import type { CommandOptions } from '@ffmpeg-ui/core';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const ffmpegRef = useRef(new FFmpeg());
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isDownloadingEngine, setIsDownloadingEngine] = useState(false);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [progress, setProgress] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+  const [queue, setQueue] = useState<MediaItem[]>([]);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [options, setOptions] = useState<CommandOptions>({
+    mode: 'convert', input: '', fmt: 'mp4', vc: 'libx264', ac: 'aac', crf: '23',
+  });
+
+  const load = async () => {
+    setIsDownloadingEngine(true);
+    const ffmpeg = ffmpegRef.current;
+    
+    ffmpeg.on('log', ({ message }) => {
+      setTerminalLogs(prev => [...prev.slice(-199), message]);
+    });
+    
+    ffmpeg.on('progress', ({ progress, time }) => {
+      // time is in microseconds, progress is ratio 0-1
+      setProgress({
+        frame: 0,
+        fps: 0,
+        speed: 1,
+        size_kb: 0,
+        time_s: time / 1000000,
+        bitrate_kbps: 0,
+        fps_ratio: progress
+      });
+    });
+    
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    await ffmpeg.load({
+      // We don't always need coreURL explicitly if resolving from unpkg works, but good to add.
+      // We'll rely on defaults for now or pass simple URLs.
+    });
+    setIsLoaded(true);
+    setIsDownloadingEngine(false);
+  };
+
+  const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[]) => {
+    if (q.length === 0 || isProcessing) return;
+
+    const ffmpeg = ffmpegRef.current;
+    setIsProcessing(true);
+    setIsDone(false);
+
+    try {
+      for (const item of q) {
+        if (!item.file) continue;
+
+        // Write file to WASM FS
+        const inName = item.name.replace(/\s+/g, '_');
+        await ffmpeg.writeFile(inName, await fetchFile(item.file));
+
+        const ext = inName.lastIndexOf('.') > 0 ? inName.substring(0, inName.lastIndexOf('.')) : inName;
+        const outName = ext + '_converted.' + opts.fmt;
+
+        const args = buildFFmpegArgs({ ...opts, input: inName });
+        
+        // Ensure options string contains output name. 
+        // Our core buildFFmpegArgs returns args Array. The Desktop app adds output file.
+        // We append output file here
+        args.push(outName);
+
+        setTerminalLogs(prev => [...prev.slice(-199), `[Command] ffmpeg ${args.join(' ')}`]);
+
+        await ffmpeg.exec(args);
+
+        // Read result
+        const data = await ffmpeg.readFile(outName);
+        const blob = new Blob([data as any], { type: 'video/mp4' }); // generic type
+        const url = URL.createObjectURL(blob);
+
+        // Trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = outName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setIsDone(true);
+    } catch(e) {
+      setTerminalLogs(prev => [...prev.slice(-199), `[Error] ${e}`]);
+      setIsDone(false);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+       <div style={{ height: '40px', background: 'var(--bg-panel)', display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid var(--border-light)' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            FFmpeg UI <span style={{ color: '#f7df1e', fontSize: '0.8em', marginLeft: '4px' }}>WEB-ASSEMBLY</span>
+          </span>
+       </div>
+       <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+          <MediaEditor
+             capabilities={isLoaded ? { has_ffmpeg: true, version: '7.1' } : null}
+             onAddFiles={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.onchange = (e) => {
+                  const files = Array.from((e.target as HTMLInputElement).files || []);
+                  const newItems = files.map((f: any) => ({
+                    id: Math.random().toString(),
+                    name: f.name,
+                    file: f
+                  }));
+                  setQueue(old => [...old, ...newItems]);
+                };
+                input.click();
+             }}
+             onDropFiles={(files) => {
+                const newItems = files.map((f: any) => ({
+                  id: Math.random().toString(),
+                  name: f.name,
+                  file: f
+                }));
+                setQueue(old => [...old, ...newItems]);
+             }}
+             onExecute={handleExecute}
+             onCancel={() => { ffmpegRef.current.terminate(); setIsProcessing(false); }}
+             onDownloadEngine={load}
+             isDownloadingEngine={isDownloadingEngine}
+             isProcessing={isProcessing}
+             isDone={isDone}
+             terminalLogs={terminalLogs}
+             progress={progress}
+             queue={queue}
+             setQueue={setQueue}
+             activeFileId={activeFileId}
+             setActiveFileId={setActiveFileId}
+             mediaInfo={null} // web doesn't easily ffprobe without running a full pass
+             options={options}
+             setOptions={setOptions}
+          />
+       </div>
+    </div>
+  );
 }
-
-export default App

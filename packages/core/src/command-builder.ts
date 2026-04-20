@@ -1,4 +1,4 @@
-import { CommandOptions } from './types';
+import type { CommandOptions } from './types';
 
 const _RES: Record<string, string> = { '4k': '3840:-2', '1080p': '1920:-2', '720p': '1280:-2', '480p': '854:-2', '360p': '640:-2' };
 const _ROT: Record<string, string> = { 'cw90': 'transpose=1', 'ccw90': 'transpose=2', '180': 'transpose=2,transpose=2', 'fliph': 'hflip', 'flipv': 'vflip' };
@@ -9,12 +9,15 @@ const _OVL: Record<string, string> = { 'tl': '10:10', 'tr': 'W-w-10:10', 'bl': '
  * Returns an array of strings, which is perfectly suited for Tauri `Command` or Node `spawn`.
  */
 export function buildFFmpegArgs(opts: CommandOptions): string[] {
-  const stem = opts.input.replace(/\.[^.]+$/, '');
+  const input = opts.input || '';
+  const stem = input.replace(/\.[^.]+$/, '');
   const p: string[] = ['-y']; // always overwrite in automated contexts
+
+  if (!input) return p;
 
   if (opts.mode === 'thumbnail') {
     p.push('-ss', opts.thTime || '00:00:05');
-    p.push('-i', opts.input);
+    p.push('-i', input);
     p.push('-vframes', '1');
     p.push(`${stem}.${opts.thFmt || 'jpg'}`);
     return p;
@@ -22,7 +25,7 @@ export function buildFFmpegArgs(opts: CommandOptions): string[] {
 
   if (opts.mode === 'audio') {
     const ac = opts.ac || 'aac';
-    p.push('-i', opts.input, '-vn');
+    p.push('-i', input, '-vn');
     if (ac === 'copy') {
       p.push('-c:a', 'copy');
     } else {
@@ -38,7 +41,7 @@ export function buildFFmpegArgs(opts: CommandOptions): string[] {
   }
 
   if (opts.mode === 'remux') {
-    p.push('-i', opts.input, '-c:v', 'copy', '-c:a', 'copy', `${stem}.${opts.fmt}`);
+    p.push('-i', input, '-c:v', 'copy', '-c:a', 'copy', `${stem}.${opts.fmt}`);
     return p;
   }
 
@@ -48,7 +51,7 @@ export function buildFFmpegArgs(opts: CommandOptions): string[] {
 
   if (opts.mode === 'convert') {
     if (opts.ts_start && opts.ts_start !== '00:00:00') p.push('-ss', opts.ts_start);
-    p.push('-i', opts.input);
+    p.push('-i', input);
     if (opts.ts_end && opts.ts_end !== '00:00:00') p.push('-to', opts.ts_end);
 
     const vf: string[] = [];
