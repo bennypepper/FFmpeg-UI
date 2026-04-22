@@ -25,8 +25,6 @@ export interface MediaEditorProps {
   onDropFiles: (files: File[]) => void;
   onExecute: (options: CommandOptions, activeItem: MediaItem | null, queue: MediaItem[]) => void;
   onCancel: () => void;
-  onDownloadEngine?: () => void;
-  isDownloadingEngine?: boolean;
   isProcessing: boolean;
   isDone: boolean;
   terminalLogs: string[];
@@ -45,7 +43,7 @@ export function MediaEditor(props: MediaEditorProps) {
     capabilities, onAddFiles, onDropFiles, onExecute, onCancel,
     isProcessing, isDone, terminalLogs, progress,
     queue, setQueue, activeFileId, setActiveFileId,
-    mediaInfo, options, setOptions, onDownloadEngine, isDownloadingEngine
+    mediaInfo, options, setOptions
   } = props;
 
   const [activeMode, setActiveMode] = useState<'video' | 'audio'>('video');
@@ -86,15 +84,7 @@ export function MediaEditor(props: MediaEditorProps) {
         <header className="app-header" style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
           <div className="app-brand" style={{ margin: 0 }}>FFmpeg Web UI</div>  
           <div className="header-right" style={{ display: 'flex', alignItems: 'center' }}>
-            {!capabilities && (
-              <button className="btn btn-ghost" onClick={onDownloadEngine} disabled={isDownloadingEngine}>
-                {isDownloadingEngine ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><RefreshCw size={14} className="animate-spin" /> Downloading Engine (~30MB)...</span>
-                ) : (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-primary)' }}><Layers size={14} /> Install FFmpeg Core</span>
-                )}
-              </button>
-            )}
+
             <button
               className="btn btn-ghost" 
               title="Toggle theme"
@@ -111,15 +101,7 @@ export function MediaEditor(props: MediaEditorProps) {
         </header>
 
         <div className="main-scrollable" style={{ paddingBottom: '40px', overflowY: 'auto' }}>
-          {!capabilities && !isDownloadingEngine && (
-            <div style={{ margin: '16px 20px 0 20px', padding: '12px 16px', background: 'var(--bg-warning, rgba(200, 100, 0, 0.1))', border: '1px solid var(--border-warning, rgba(200, 100, 0, 0.3))', borderRadius: '6px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <AlertCircle size={20} style={{ color: 'var(--text-warning, #e67e22)' }} />
-              <div style={{ flex: 1, fontSize: '0.85rem' }}>
-                <strong style={{ display: 'block', marginBottom: '2px', color: 'var(--text-warning, #e67e22)' }}>Engine Not Loaded</strong>
-                <span style={{ opacity: 0.8 }}>For web-based execution, FFmpeg runs completely offline inside your browser. You need to <strong>Install FFmpeg Core (~30MB)</strong> via the top-right button before converting files.</span>
-              </div>
-            </div>
-          )}
+
 
           <div className="main-top">
             <div className="card" style={{ flex: 1 }}>
