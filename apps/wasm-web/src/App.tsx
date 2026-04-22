@@ -75,7 +75,8 @@ export default function App() {
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      classWorkerURL: await toBlobURL('https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js', 'text/javascript')
     });
     setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully. Ready to convert.`]);
     setIsLoaded(true);
