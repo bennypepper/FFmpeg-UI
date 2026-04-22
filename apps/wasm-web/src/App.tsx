@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { MediaEditor } from '@ffmpeg-ui/ui';
 import type { MediaItem } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs } from '@ffmpeg-ui/core';
@@ -76,17 +76,13 @@ export default function App() {
       });
     });
     
-    // UMD core + UMD classic worker.
-    // Classic workers (non-module) have unrestricted WebAssembly access even
-    // under strict COEP "require-corp" — this avoids the ESM/blob-worker
-    // "WebAssembly is not defined" bug in Firefox and other browsers.
-    // All three files are served locally (same-origin) with CORP headers.
+    // toBlobURL fetches the file in the main thread (same-origin, no CORP needed)
+    // and returns a blob: URL. The ESM module worker can then import() blob URLs
+    // freely because they are always same-origin — no COEP/CORP issues.
     const base = window.location.origin + '/ffmpeg';
-    await ffmpeg.load({
-      coreURL:        `${base}/ffmpeg-core.js`,
-      wasmURL:        `${base}/ffmpeg-core.wasm`,
-      classWorkerURL: `${base}/814.ffmpeg.js`,
-    });
+    const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
+    const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm');
+    await ffmpeg.load({ coreURL, wasmURL });
     setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
     setIsLoaded(true);
     setIsDownloadingEngine(false);
