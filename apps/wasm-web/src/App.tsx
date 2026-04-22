@@ -76,12 +76,16 @@ export default function App() {
       });
     });
     
-    // Using local ESM assets from /public/ffmpeg/
-    // We use absolute URLs to ensure correct resolution inside the worker thread
-    const baseURL = window.location.origin + '/ffmpeg';
+    // UMD core + UMD classic worker.
+    // Classic workers (non-module) have unrestricted WebAssembly access even
+    // under strict COEP "require-corp" — this avoids the ESM/blob-worker
+    // "WebAssembly is not defined" bug in Firefox and other browsers.
+    // All three files are served locally (same-origin) with CORP headers.
+    const base = window.location.origin + '/ffmpeg';
     await ffmpeg.load({
-      coreURL: `${baseURL}/ffmpeg-core.js`,
-      wasmURL: `${baseURL}/ffmpeg-core.wasm`
+      coreURL:        `${base}/ffmpeg-core.js`,
+      wasmURL:        `${base}/ffmpeg-core.wasm`,
+      classWorkerURL: `${base}/814.ffmpeg.js`,
     });
     setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
     setIsLoaded(true);
