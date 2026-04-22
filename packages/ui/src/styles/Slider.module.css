@@ -18,12 +18,13 @@
 }
 
 .value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--bg-dark);
-  background: var(--accent-primary);
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-2, var(--text-secondary));
+  background: var(--bg-card, transparent);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
 }
 
 .input {

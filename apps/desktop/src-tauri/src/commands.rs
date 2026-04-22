@@ -125,12 +125,9 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
     );
 
     // Build the FFmpeg command:
-    //   ffmpeg -i <input>  [args from core package]  <output>  -y
+    // args from core package includes -i, input, all flags, and the output path.
     let mut child = FfmpegCommand::new()
-        .input(&params.input_path)
         .args(&params.args)
-        .arg(&params.output_path)
-        .overwrite() // -y (overwrite without prompt)
         .spawn()
         .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
 

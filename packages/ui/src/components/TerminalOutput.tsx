@@ -19,9 +19,6 @@ export function TerminalOutput({ logs, title = 'FFmpeg Output' }: TerminalOutput
   return (
     <div className={styles.terminal}>
       <div className={styles.header}>
-        <div className={`${styles.dot} ${styles.red}`} />
-        <div className={`${styles.dot} ${styles.yellow}`} />
-        <div className={`${styles.dot} ${styles.green}`} />
         <div className={styles.title}>{title}</div>
       </div>
       <div className={styles.content} ref={contentRef}>
