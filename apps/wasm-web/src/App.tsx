@@ -76,11 +76,12 @@ export default function App() {
       });
     });
     
-    // Using local assets from /public/ffmpeg/
+    // Using local ESM assets from /public/ffmpeg/
+    // We use absolute URLs to ensure correct resolution inside the worker thread
+    const baseURL = window.location.origin + '/ffmpeg';
     await ffmpeg.load({
-      coreURL: '/ffmpeg/ffmpeg-core.js',
-      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
-      classWorkerURL: '/ffmpeg/814.ffmpeg.js'
+      coreURL: `${baseURL}/ffmpeg-core.js`,
+      wasmURL: `${baseURL}/ffmpeg-core.wasm`
     });
     setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
     setIsLoaded(true);
