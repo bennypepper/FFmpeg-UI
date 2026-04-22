@@ -76,12 +76,12 @@ export default function App() {
       });
     });
     
-    // toBlobURL fetches the file in the main thread (same-origin, no CORP needed)
-    // and returns a blob: URL. The ESM module worker can then import() blob URLs
-    // freely because they are always same-origin — no COEP/CORP issues.
-    const base = window.location.origin + '/ffmpeg';
-    const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
-    const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm');
+    // toBlobURL fetches from unpkg (which correctly serves Cross-Origin-Resource-Policy: cross-origin)
+    // and wraps the content in a same-origin blob: URL. The ESM module worker
+    // can then import() this blob freely — no COEP/CORP restrictions on same-origin blobs.
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+    const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
     await ffmpeg.load({ coreURL, wasmURL });
     setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
     setIsLoaded(true);
