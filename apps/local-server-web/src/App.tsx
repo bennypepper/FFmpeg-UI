@@ -196,7 +196,7 @@ export default function App() {
               </span>
           )}
        </div>
-       <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+       <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
           <MediaEditor
              capabilities={capabilities}
              onAddFiles={() => {

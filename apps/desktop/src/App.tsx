@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { Store } from '@tauri-apps/plugin-store';
@@ -118,7 +118,31 @@ export default function App() {
     try {
       const probeJsonStr = await invoke<string>('probe_file', { path });
       const info = JSON.parse(probeJsonStr);
-      setMediaInfo(info.format || {});
+      let merged = { ...info.format };
+      
+      if (info.streams && info.streams.length > 0) {
+        const vStream = info.streams.find((s: any) => s.codec_type === 'video');
+        const aStream = info.streams.find((s: any) => s.codec_type === 'audio');
+        
+        if (vStream) {
+          merged.video_codec = vStream.codec_name;
+          merged.width = vStream.width;
+          merged.height = vStream.height;
+          // Note: r_frame_rate is usually a fraction like "30000/1001" or "60/1"
+          if (vStream.r_frame_rate) {
+             const parts = vStream.r_frame_rate.split('/');
+             if (parts.length === 2 && parts[1] !== '0') {
+                 merged.fps = parseInt(parts[0]) / parseInt(parts[1]);
+             }
+          }
+        }
+        if (aStream) {
+          merged.audio_codec = aStream.codec_name;
+          merged.sample_rate = aStream.sample_rate;
+          merged.channels = aStream.channels;
+        }
+      }
+      setMediaInfo(merged);
     } catch (err) {
       setTerminalLogs(prev => [...prev.slice(-199), '[Warning] ffprobe failed: ' + err]);
       setMediaInfo(null);
@@ -163,17 +187,25 @@ export default function App() {
     }
 
     const ffmpegArgs = buildFFmpegArgs({ ...opts, input: itemToProcess.path });
-    setTerminalLogs(prev => [...prev.slice(-199), '[Command] ffmpeg -i \"' + itemToProcess.path + '\" ' + ffmpegArgs.join(' ') + ' \"' + selectedSavePath + '\"']);
+    ffmpegArgs[ffmpegArgs.length - 1] = selectedSavePath; // Overwrite the final output path
+
+    setTerminalLogs(prev => [...prev.slice(-199), '[Command] ffmpeg ' + ffmpegArgs.join(' ')]);
 
     try {
       await invoke('start_convert', {
         params: {
           job_id: jobId,
-          input_path: itemToProcess.path,
+          input_path: itemToProcess.path, // kept for reference in backend if needed
           output_path: selectedSavePath,
           args: ffmpegArgs,
         },
       });
+      // Safely reset state after invoke completes successfully.
+      setIsProcessing(false);
+      setIsDone(true);
+      currentJobId.current = null;
+      setProgress(null);
+      sendNotification({ title: 'FFmpeg UI', body: '✅ Conversion successfully completed!' });
     } catch (err) {
       setTerminalLogs(prev => [...prev.slice(-199), '[Fatal] ' + err]);
       setIsProcessing(false);
@@ -191,7 +223,7 @@ export default function App() {
       const paths = Array.isArray(selected) ? selected : [selected];
       const newItems = paths.map(p => {
         const sep = p.includes('/') ? '/' : '\\\\';
-        return { id: p, name: p.split(sep).pop() || 'Unknown', path: p };
+        return { id: p, name: p.split(sep).pop() || 'Unknown', path: p, previewUrl: convertFileSrc(p) };
       });
       setQueue(old => [...old, ...newItems]);
       if (!activeFileId && newItems.length > 0) setActiveFileId(newItems[0].id);
@@ -236,7 +268,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+      <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         <MediaEditor
           capabilities={capabilities}
           onAddFiles={handleAddFiles}
@@ -244,7 +276,7 @@ export default function App() {
             const newItems = files.map((f: any) => {
               const p = f.path;
               const sep = p ? (p.includes('/') ? '/' : '\\\\') : '/';
-              return { id: p || Math.random().toString(), name: p ? p.split(sep).pop() : f.name, path: p, file: f };
+              return { id: p || Math.random().toString(), name: p ? p.split(sep).pop() : f.name, path: p, file: f, previewUrl: p ? convertFileSrc(p) : URL.createObjectURL(f) };
             });
             setQueue(old => [...old, ...newItems]);
             if (!activeFileId && newItems.length > 0) setActiveFileId(newItems[0].id);

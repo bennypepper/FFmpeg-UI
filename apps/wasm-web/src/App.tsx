@@ -69,11 +69,8 @@ export default function App() {
         const outName = ext + '_converted.' + opts.fmt;
 
         const args = buildFFmpegArgs({ ...opts, input: inName });
-        
-        // Ensure options string contains output name. 
-        // Our core buildFFmpegArgs returns args Array. The Desktop app adds output file.
-        // We append output file here
-        args.push(outName);
+        // The core buildFFmpegArgs returns args Array with outName as the last element.
+        args[args.length - 1] = outName;
 
         setTerminalLogs(prev => [...prev.slice(-199), `[Command] ffmpeg ${args.join(' ')}`]);
 
@@ -107,7 +104,7 @@ export default function App() {
             FFmpeg UI <span style={{ color: '#f7df1e', fontSize: '0.8em', marginLeft: '4px' }}>WEB-ASSEMBLY</span>
           </span>
        </div>
-       <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+       <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
           <MediaEditor
              capabilities={isLoaded ? { has_ffmpeg: true, version: '7.1' } : null}
              onAddFiles={() => {
