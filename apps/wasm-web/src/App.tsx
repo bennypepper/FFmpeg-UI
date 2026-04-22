@@ -20,6 +20,10 @@ export default function App() {
     mode: 'convert', input: '', fmt: 'mp4', vc: 'libx264', ac: 'aac', crf: '23',
   });
 
+  useEffect(() => {
+    load();
+  }, []);
+
   const probeHTML5 = (file: File): Promise<any> => {
     return new Promise((resolve) => {
         const url = URL.createObjectURL(file);
@@ -52,6 +56,7 @@ export default function App() {
   };
 
   const load = async () => {
+    if (isLoaded || isDownloadingEngine) return;
     setIsDownloadingEngine(true);
     const ffmpeg = ffmpegRef.current;
     
@@ -60,7 +65,6 @@ export default function App() {
     });
     
     ffmpeg.on('progress', ({ progress, time }) => {
-      // time is in microseconds, progress is ratio 0-1
       setProgress({
         frame: 0,
         fps: 0,
@@ -72,12 +76,13 @@ export default function App() {
       });
     });
     
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    // Using local assets from /public/ffmpeg/
     await ffmpeg.load({
-      coreURL: `${baseURL}/ffmpeg-core.js`,
-      wasmURL: `${baseURL}/ffmpeg-core.wasm`
+      coreURL: '/ffmpeg/ffmpeg-core.js',
+      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
+      classWorkerURL: '/ffmpeg/814.ffmpeg.js'
     });
-    setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully. Ready to convert.`]);
+    setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
     setIsLoaded(true);
     setIsDownloadingEngine(false);
   };
@@ -168,8 +173,6 @@ export default function App() {
              }}
              onExecute={handleExecute}
              onCancel={() => { ffmpegRef.current.terminate(); setIsProcessing(false); }}
-             onDownloadEngine={load}
-             isDownloadingEngine={isDownloadingEngine}
              isProcessing={isProcessing}
              isDone={isDone}
              terminalLogs={terminalLogs}
