@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { MediaEditor } from '@ffmpeg-ui/ui';
 import type { MediaItem } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs } from '@ffmpeg-ui/core';
@@ -19,6 +19,37 @@ export default function App() {
   const [options, setOptions] = useState<CommandOptions>({
     mode: 'convert', input: '', fmt: 'mp4', vc: 'libx264', ac: 'aac', crf: '23',
   });
+
+  const probeHTML5 = (file: File): Promise<any> => {
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const name = file.name.toLowerCase();
+        let el: HTMLVideoElement | HTMLAudioElement;
+        const isVideo = name.match(/\.(mp4|webm|mov|mkv|avi)$/i);
+        const isAudio = name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i);
+        
+        if (isVideo) el = document.createElement('video');
+        else if (isAudio) el = document.createElement('audio');
+        else {
+            resolve({ size_mb: (file.size / (1024*1024)).toFixed(2) });
+            return;
+        }
+
+        el.onloadedmetadata = () => {
+            resolve({
+                duration: el.duration,
+                width: (el as HTMLVideoElement).videoWidth,
+                height: (el as HTMLVideoElement).videoHeight,
+                size_mb: (file.size / (1024*1024)).toFixed(2),
+                format_name: file.type || undefined,
+                video_codec: isVideo ? 'html5_video' : undefined,
+                audio_codec: isAudio ? 'html5_audio' : undefined
+            });
+        };
+        el.onerror = () => resolve({ size_mb: (file.size / (1024*1024)).toFixed(2) });
+        el.src = url;
+    });
+  };
 
   const load = async () => {
     setIsDownloadingEngine(true);
@@ -43,9 +74,10 @@ export default function App() {
     
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     await ffmpeg.load({
-      // We don't always need coreURL explicitly if resolving from unpkg works, but good to add.
-      // We'll rely on defaults for now or pass simple URLs.
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
     });
+    setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully. Ready to convert.`]);
     setIsLoaded(true);
     setIsDownloadingEngine(false);
   };
@@ -111,23 +143,27 @@ export default function App() {
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.multiple = true;
-                input.onchange = (e) => {
+                input.onchange = async (e) => {
                   const files = Array.from((e.target as HTMLInputElement).files || []);
-                  const newItems = files.map((f: any) => ({
+                  const newItems = await Promise.all(files.map(async (f: any) => ({
                     id: Math.random().toString(),
                     name: f.name,
-                    file: f
-                  }));
+                    file: f,
+                    previewUrl: URL.createObjectURL(f),
+                    probe: await probeHTML5(f)
+                  })));
                   setQueue(old => [...old, ...newItems]);
                 };
                 input.click();
              }}
-             onDropFiles={(files) => {
-                const newItems = files.map((f: any) => ({
+             onDropFiles={async (files) => {
+                const newItems = await Promise.all(files.map(async (f: any) => ({
                   id: Math.random().toString(),
                   name: f.name,
-                  file: f
-                }));
+                  file: f,
+                  previewUrl: URL.createObjectURL(f),
+                  probe: await probeHTML5(f)
+                })));
                 setQueue(old => [...old, ...newItems]);
              }}
              onExecute={handleExecute}
@@ -142,7 +178,7 @@ export default function App() {
              setQueue={setQueue}
              activeFileId={activeFileId}
              setActiveFileId={setActiveFileId}
-             mediaInfo={null} // web doesn't easily ffprobe without running a full pass
+             mediaInfo={activeFileId ? queue.find(q => q.id === activeFileId)?.probe : null}
              options={options}
              setOptions={setOptions}
           />
