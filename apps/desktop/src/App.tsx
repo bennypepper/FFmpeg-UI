@@ -168,7 +168,7 @@ export default function App() {
     setIsDone(false);
     setProgress(null);
 
-    const sep = itemToProcess.path.includes('/') ? '/' : '\\\\';
+    const sep = itemToProcess.path.includes('/') ? '/' : '\\';
     const parts = itemToProcess.path.split(sep);
     const rawName = parts[parts.length - 1];
     const nameNoExt = rawName.replace(/\.[^\.]+$/, '');
@@ -200,12 +200,8 @@ export default function App() {
           args: ffmpegArgs,
         },
       });
-      // Safely reset state after invoke completes successfully.
-      setIsProcessing(false);
-      setIsDone(true);
-      currentJobId.current = null;
-      setProgress(null);
-      sendNotification({ title: 'FFmpeg UI', body: '✅ Conversion successfully completed!' });
+      // Completion state is handled by the 'log-update' event listener
+      // which fires on FfmpegEvent::Done. No need to duplicate here.
     } catch (err) {
       setTerminalLogs(prev => [...prev.slice(-199), '[Fatal] ' + err]);
       setIsProcessing(false);
@@ -222,7 +218,7 @@ export default function App() {
       if (!selected) return;
       const paths = Array.isArray(selected) ? selected : [selected];
       const newItems = paths.map(p => {
-        const sep = p.includes('/') ? '/' : '\\\\';
+        const sep = p.includes('/') ? '/' : '\\';
         return { id: p, name: p.split(sep).pop() || 'Unknown', path: p, previewUrl: convertFileSrc(p) };
       });
       setQueue(old => [...old, ...newItems]);
@@ -247,6 +243,9 @@ export default function App() {
     }
   };
 
+  const showMissingOverlay = capabilities && !capabilities.has_ffmpeg && !isDownloadingEngine;
+  const showDownloadingOverlay = isDownloadingEngine;
+
   return (
     <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', userSelect: 'none' }}>
       
@@ -268,6 +267,124 @@ export default function App() {
         )}
       </div>
 
+      {/* ── FFmpeg Missing Overlay ── */}
+      {(showMissingOverlay || showDownloadingOverlay) && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '20px',
+          padding: '40px',
+        }}>
+          <div style={{
+            background: 'var(--glass, rgba(30,30,30,0.95))',
+            border: '1px solid var(--border, #333)',
+            borderRadius: '16px',
+            padding: '40px 48px',
+            maxWidth: '480px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          }}>
+            {showDownloadingOverlay ? (
+              <>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏬</div>
+                <h2 style={{ color: 'var(--text-1, #f5f5f5)', fontSize: '1.3rem', fontWeight: 700, margin: '0 0 8px' }}>
+                  Downloading FFmpeg Core...
+                </h2>
+                <p style={{ color: 'var(--text-2, #aaa)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 20px' }}>
+                  Fetching prebuilt FFmpeg binaries. This may take a minute depending on your connection.
+                </p>
+                <div style={{
+                  width: '100%',
+                  height: '4px',
+                  background: 'var(--border, #333)',
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    background: 'var(--active, #f5f5f5)',
+                    borderRadius: '2px',
+                    animation: 'downloadPulse 1.5s ease-in-out infinite',
+                  }} />
+                </div>
+                <div style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  maxHeight: '120px',
+                  overflowY: 'auto',
+                  textAlign: 'left',
+                  fontFamily: 'monospace',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-2, #888)',
+                  lineHeight: 1.6,
+                }}>
+                  {terminalLogs.slice(-8).map((log, i) => (
+                    <div key={i}>{log}</div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+                <h2 style={{ color: 'var(--text-1, #f5f5f5)', fontSize: '1.3rem', fontWeight: 700, margin: '0 0 8px' }}>
+                  FFmpeg Not Found
+                </h2>
+                <p style={{ color: 'var(--text-2, #aaa)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 24px' }}>
+                  FFmpeg is required to process media files but was not detected on this machine. 
+                  Click below to automatically download the required binaries.
+                </p>
+                <button
+                  onClick={handleDownloadEngine}
+                  style={{
+                    width: '100%',
+                    padding: '14px 24px',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    background: 'var(--active, #f5f5f5)',
+                    color: 'var(--active-fg, #171717)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'opacity 0.2s ease',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+                  }}
+                  onMouseOver={e => (e.currentTarget.style.opacity = '0.85')}
+                  onMouseOut={e => (e.currentTarget.style.opacity = '1')}
+                >
+                  ⬇️ Download FFmpeg Core
+                </button>
+                <p style={{ color: 'var(--text-3, #666)', fontSize: '0.72rem', marginTop: '16px', lineHeight: 1.4 }}>
+                  Downloads ~80 MB of prebuilt binaries.
+                  <br />Alternatively, install FFmpeg to your system PATH manually.
+                </p>
+              </>
+            )}
+          </div>
+          <style>{`
+            @keyframes downloadPulse {
+              0%, 100% { opacity: 0.4; transform: scaleX(0.3); transform-origin: left; }
+              50% { opacity: 1; transform: scaleX(1); transform-origin: left; }
+            }
+          `}</style>
+        </div>
+      )}
+
       <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         <MediaEditor
           capabilities={capabilities}
@@ -275,7 +392,7 @@ export default function App() {
           onDropFiles={(files) => {
             const newItems = files.map((f: any) => {
               const p = f.path;
-              const sep = p ? (p.includes('/') ? '/' : '\\\\') : '/';
+              const sep = p ? (p.includes('/') ? '/' : '\\') : '/';
               return { id: p || Math.random().toString(), name: p ? p.split(sep).pop() : f.name, path: p, file: f, previewUrl: p ? convertFileSrc(p) : URL.createObjectURL(f) };
             });
             setQueue(old => [...old, ...newItems]);
@@ -290,8 +407,6 @@ export default function App() {
             currentJobId.current = null;
             setProgress(null);
           }}
-          onDownloadEngine={handleDownloadEngine}
-          isDownloadingEngine={isDownloadingEngine}
           isProcessing={isProcessing}
           isDone={isDone}
           terminalLogs={terminalLogs}
@@ -308,3 +423,4 @@ export default function App() {
     </div>
   );
 }
+

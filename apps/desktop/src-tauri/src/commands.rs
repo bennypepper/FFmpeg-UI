@@ -50,16 +50,44 @@ pub struct ConvertParams {
 // ─────────────────────────────────────────────
 #[tauri::command]
 pub fn get_capabilities() -> Result<Capabilities, String> {
+    // First try system PATH
     let ffmpeg_version = Command::new("ffmpeg")
         .arg("-version")
         .output()
         .map(|out| {
-            let s = String::from_utf8_lossy(&out.stdout);
-            s.lines().next().unwrap_or("unknown").to_string()
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                s.lines().next().unwrap_or("unknown").to_string()
+            } else {
+                "Not found".to_string()
+            }
         })
         .unwrap_or_else(|_| "Not found".to_string());
 
-    let has_ffmpeg = !ffmpeg_version.contains("Not found");
+    let has_ffmpeg_system = !ffmpeg_version.contains("Not found");
+
+    // If not on PATH, check ffmpeg-sidecar location (where auto_download puts it)
+    let (has_ffmpeg, version) = if has_ffmpeg_system {
+        (true, ffmpeg_version)
+    } else {
+        match ffmpeg_sidecar::command::FfmpegCommand::new()
+            .args(["-version"])
+            .spawn()
+        {
+            Ok(mut child) => {
+                let output = child.wait_with_output();
+                match output {
+                    Ok(out) => {
+                        let s = String::from_utf8_lossy(&out.stdout);
+                        let ver = s.lines().next().unwrap_or("ffmpeg (sidecar)").to_string();
+                        (true, ver)
+                    }
+                    Err(_) => (false, "Not found".to_string()),
+                }
+            }
+            Err(_) => (false, "Not found".to_string()),
+        }
+    };
 
     let has_ffprobe = Command::new("ffprobe")
         .arg("-version")
@@ -70,7 +98,7 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
     Ok(Capabilities {
         has_ffmpeg,
         has_ffprobe,
-        version: ffmpeg_version,
+        version,
     })
 }
 
