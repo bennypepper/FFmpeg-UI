@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { MediaEditor } from '@ffmpeg-ui/ui';
@@ -6,10 +6,15 @@ import type { MediaItem } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs } from '@ffmpeg-ui/core';
 import type { CommandOptions } from '@ffmpeg-ui/core';
 
+// Use a consistent core version that matches the installed @ffmpeg/ffmpeg
+const CORE_VERSION = '0.12.6';
+const CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
+
 export default function App() {
   const ffmpegRef = useRef(new FFmpeg());
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDownloadingEngine, setIsDownloadingEngine] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [progress, setProgress] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,10 +24,6 @@ export default function App() {
   const [options, setOptions] = useState<CommandOptions>({
     mode: 'convert', input: '', fmt: 'mp4', vc: 'libx264', ac: 'aac', crf: '23',
   });
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const probeHTML5 = (file: File): Promise<any> => {
     return new Promise((resolve) => {
@@ -55,41 +56,59 @@ export default function App() {
     });
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (isLoaded || isDownloadingEngine) return;
     setIsDownloadingEngine(true);
-    const ffmpeg = ffmpegRef.current;
-    
-    ffmpeg.on('log', ({ message }) => {
-      setTerminalLogs(prev => [...prev.slice(-199), message]);
-    });
-    
-    ffmpeg.on('progress', ({ progress, time }) => {
-      setProgress({
-        frame: 0,
-        fps: 0,
-        speed: 1,
-        size_kb: 0,
-        time_s: time / 1000000,
-        bitrate_kbps: 0,
-        fps_ratio: progress
+    setLoadError(null);
+
+    try {
+      const ffmpeg = ffmpegRef.current;
+      
+      ffmpeg.on('log', ({ message }) => {
+        setTerminalLogs(prev => [...prev.slice(-199), message]);
       });
-    });
-    
-    // toBlobURL fetches from unpkg (which correctly serves Cross-Origin-Resource-Policy: cross-origin)
-    // and wraps the content in a same-origin blob: URL. The ESM module worker
-    // can then import() this blob freely — no COEP/CORP restrictions on same-origin blobs.
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-    const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-    const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-    await ffmpeg.load({ coreURL, wasmURL });
-    setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully from local source.`]);
-    setIsLoaded(true);
-    setIsDownloadingEngine(false);
-  };
+      
+      ffmpeg.on('progress', ({ progress, time }) => {
+        setProgress({
+          frame: 0,
+          fps: 0,
+          speed: 1,
+          size_kb: 0,
+          time_s: time / 1000000,
+          bitrate_kbps: 0,
+          fps_ratio: progress
+        });
+      });
+      
+      setTerminalLogs(prev => [...prev.slice(-199), `[System] Loading FFmpeg WASM core v${CORE_VERSION}...`]);
+
+      // Convert ALL assets to same-origin blob URLs.
+      // This is the critical fix: without classWorkerURL as a blob, the module worker
+      // can't access WebAssembly under COEP require-corp restrictions.
+      const coreURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
+      const workerURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
+
+      await ffmpeg.load({ coreURL, wasmURL, workerURL });
+      
+      setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully.`]);
+      setIsLoaded(true);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('FFmpeg WASM load failed:', err);
+      setLoadError(errMsg);
+      setTerminalLogs(prev => [...prev.slice(-199), `[Error] Failed to load FFmpeg WASM: ${errMsg}`]);
+    } finally {
+      setIsDownloadingEngine(false);
+    }
+  }, [isLoaded, isDownloadingEngine]);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[]) => {
-    if (q.length === 0 || isProcessing) return;
+    if (q.length === 0 || isProcessing || !isLoaded) return;
 
     const ffmpeg = ffmpegRef.current;
     setIsProcessing(true);
@@ -135,6 +154,16 @@ export default function App() {
     }
   };
 
+  const handleCancel = useCallback(() => {
+    ffmpegRef.current.terminate();
+    setIsProcessing(false);
+    setIsLoaded(false);
+    // Create a fresh instance and re-load so the app remains usable
+    ffmpegRef.current = new FFmpeg();
+    // Defer re-load to next tick so state updates propagate
+    setTimeout(() => load(), 100);
+  }, [load]);
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
        <div style={{ height: '40px', background: 'var(--bg-panel)', display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid var(--border-light)' }}>
@@ -142,6 +171,41 @@ export default function App() {
             FFmpeg UI <span style={{ color: '#f7df1e', fontSize: '0.8em', marginLeft: '4px' }}>WEB-ASSEMBLY</span>
           </span>
        </div>
+
+       {/* Load error banner */}
+       {loadError && (
+         <div style={{
+           padding: '12px 20px',
+           background: 'rgba(220, 38, 38, 0.1)',
+           borderBottom: '1px solid rgba(220, 38, 38, 0.3)',
+           color: '#dc2626',
+           fontSize: '0.82rem',
+           display: 'flex',
+           alignItems: 'center',
+           justifyContent: 'space-between',
+           gap: '12px',
+         }}>
+           <span>⚠️ FFmpeg WASM failed to load: {loadError}</span>
+           <button
+             onClick={() => { setLoadError(null); load(); }}
+             style={{
+               padding: '6px 16px',
+               background: '#dc2626',
+               color: '#fff',
+               border: 'none',
+               borderRadius: '6px',
+               cursor: 'pointer',
+               fontSize: '0.78rem',
+               fontWeight: 600,
+               fontFamily: 'inherit',
+               flexShrink: 0,
+             }}
+           >
+             Retry
+           </button>
+         </div>
+       )}
+
        <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
           <MediaEditor
              capabilities={isLoaded ? { has_ffmpeg: true, version: '7.1' } : null}
@@ -173,7 +237,7 @@ export default function App() {
                 setQueue(old => [...old, ...newItems]);
              }}
              onExecute={handleExecute}
-             onCancel={() => { ffmpegRef.current.terminate(); setIsProcessing(false); }}
+             onCancel={handleCancel}
              isProcessing={isProcessing}
              isDone={isDone}
              terminalLogs={terminalLogs}
@@ -190,3 +254,4 @@ export default function App() {
     </div>
   );
 }
+
