@@ -82,14 +82,21 @@ export default function App() {
       
       setTerminalLogs(prev => [...prev.slice(-199), `[System] Loading FFmpeg WASM core v${CORE_VERSION}...`]);
 
-      // Convert ALL assets to same-origin blob URLs.
-      // This is the critical fix: without classWorkerURL as a blob, the module worker
-      // can't access WebAssembly under COEP require-corp restrictions.
+      // Convert core assets to same-origin blob URLs so they work under COEP require-corp.
       const coreURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
       const wasmURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
-      const workerURL = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
 
-      await ffmpeg.load({ coreURL, wasmURL, workerURL });
+      // CRITICAL: Also blobify the @ffmpeg/ffmpeg library's own worker.
+      // Without this, Vite bundles worker.js into an IIFE chunk that breaks
+      // dynamic import() of blob URLs in the module worker context, causing
+      // "WebAssembly is not defined". Loading the worker from a clean blob URL
+      // bypasses Vite's bundling and gives the worker a proper ES module context.
+      const classWorkerURL = await toBlobURL(
+        `https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js`,
+        'text/javascript'
+      );
+
+      await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
       
       setTerminalLogs(prev => [...prev.slice(-199), `[System] FFmpeg WebAssembly loaded successfully.`]);
       setIsLoaded(true);
