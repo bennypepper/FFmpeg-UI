@@ -9,7 +9,8 @@ import type { CommandOptions } from '@ffmpeg-ui/core';
 // Use a consistent core version that matches the installed @ffmpeg/ffmpeg
 const CORE_VERSION = '0.12.6';
 const CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
-const FFMPEG_LIB_VERSION = '0.12.15';
+
+
 
 type LoadStatus =
   | { step: 'idle' }
@@ -135,19 +136,20 @@ export default function App() {
         true, makeProgressCb('wasm', 'ffmpeg-core.wasm')
       );
 
-      // Step 3: Download @ffmpeg/ffmpeg's worker (bypasses Vite bundling)
+      // Step 3: Download @ffmpeg/ffmpeg's orchestration worker.
+      // NOTE: We do NOT use classWorkerURL here. The unpkg ESM worker.js has
+      // relative imports (./const.js, ./errors.js) that are unresolvable from
+      // a blob URL — this causes the worker to fail silently and ffmpeg.load()
+      // to hang forever. Vite's bundled IIFE worker is self-contained and works.
       setLoadStatus({ step: 'worker', pct: 0 });
-      log('[Download] Fetching library worker...');
-      const classWorkerURL = await toBlobURL(
-        `https://unpkg.com/@ffmpeg/ffmpeg@${FFMPEG_LIB_VERSION}/dist/esm/worker.js`,
-        'text/javascript',
-        true, makeProgressCb('worker', 'worker.js')
-      );
+      log('[Download] Preparing worker...');
+      setLoadStatus({ step: 'worker', pct: 100 });
+      log('[Download] worker.js: bundled ✓');
 
       // Step 4: Initialize the FFmpeg engine
       setLoadStatus({ step: 'init' });
       log('[System] All files downloaded. Initializing FFmpeg WASM engine...');
-      await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
+      await ffmpeg.load({ coreURL, wasmURL });
       
       const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
       log(`[System] ✅ FFmpeg WebAssembly loaded successfully in ${elapsed}s`);
