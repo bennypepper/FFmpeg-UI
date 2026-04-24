@@ -26,7 +26,8 @@ This is the browser-native deployment of FFmpeg UI. It uses [ffmpeg.wasm](https:
 Browser Tab
 │
 ├── Main Thread (React UI)
-│   ├── App.tsx              ← state, load orchestration, file handling
+│   ├── App.tsx              ← UI shell, convert pipeline, file handling
+│   ├── useFFmpeg.ts         ← FFmpeg lifecycle hook (load state machine, exec, cancel)
 │   ├── @ffmpeg-ui/ui        ← shared React component library
 │   └── @ffmpeg-ui/core      ← FFmpeg command builder (buildFFmpegArgs)
 │
@@ -41,12 +42,12 @@ Browser Tab
 
 ### Load Sequence
 
-When the page opens, `ffmpeg.load()` runs automatically:
+When the page opens, `useFFmpeg` runs automatically:
 
-1. **`ffmpeg-core.js`** — fetched from `/ffmpeg/ffmpeg-core.js` (same-origin), converted to a blob URL with correct MIME type
-2. **`ffmpeg-core.wasm`** — fetched from `/ffmpeg/ffmpeg-core.wasm` (~30 MB), converted to a blob URL with `application/wasm` MIME type
+1. **Download** — `ffmpeg-core.wasm` (~30 MB) is streamed from `/ffmpeg/ffmpeg-core.wasm` (same-origin) with live progress tracking
+2. **Initialize** — `ffmpeg.load()` is called with the direct same-origin paths — **no `toBlobURL()` wrapping**
 3. **Worker spawned** — `@ffmpeg/ffmpeg` creates a `{ type: "module" }` Web Worker from Vite's bundled `worker.js`
-4. **Core initialized** — the worker imports `ffmpeg-core.js`, which loads the WASM binary and compiles it via `WebAssembly.instantiateStreaming()`
+4. **Core compiled** — the worker imports `ffmpeg-core.js`, which loads the WASM binary and compiles it via `WebAssembly.instantiateStreaming()`
 5. **Ready** — titlebar shows 🟢 Ready, Convert button activates
 
 The UI shows a yellow progress banner with percentage during load. The terminal panel logs each step.
@@ -58,24 +59,37 @@ When the user clicks Convert:
 ```
 User clicks Convert
 → handleExecute() in App.tsx
-→ ffmpeg.writeFile(inputName, fileBytes)   // writes to in-memory WASM filesystem
-→ ffmpeg.exec([...ffmpegArgs])             // runs FFmpeg inside the worker
-   ← ffmpeg 'log' events → terminal panel
-   ← ffmpeg 'progress' events → progress bar
-→ ffmpeg.readFile(outputName)              // reads result from WASM filesystem
+→ useFFmpeg.exec(args, inputFile, outputName)
+  → ffmpeg.writeFile(inputName, fileBytes)   // writes to in-memory WASM filesystem
+  → ffmpeg.exec([...ffmpegArgs])             // runs FFmpeg inside the worker
+     ← ffmpeg 'log' events → terminal panel
+     ← ffmpeg 'progress' events → progress bar
+  → ffmpeg.readFile(outputName)              // reads result from WASM filesystem
+  → returns Blob
 → Blob → createObjectURL → <a>.click()    // triggers browser download
 ```
 
 ### Why Local `/public/ffmpeg/` Files?
 
-Early versions fetched `ffmpeg-core.js` from unpkg CDN and converted it to a blob URL. This caused a `ReferenceError: WebAssembly is not defined` in production because:
+Early versions fetched `ffmpeg-core.js` from unpkg CDN and wrapped it in `toBlobURL()`. A regression later re-introduced `toBlobURL()` even for the local `/public/ffmpeg/` files. Both cases caused `ReferenceError: WebAssembly is not defined` because:
 
 - Vite bundles the `@ffmpeg/ffmpeg` worker as an **IIFE** chunk, which runs inside a `{ type: "module" }` Web Worker
 - In module workers, `importScripts()` is unavailable, so the worker falls through to `dynamic import()`
 - The ESM `ffmpeg-core.js`, when dynamically imported from a `blob:` URL inside this IIFE-in-module-worker context, loses its proper global scope
 - Emscripten's startup check `typeof WebAssembly !== "object"` fails and throws
 
-**Serving the files from the same origin** (as static assets under `/public/ffmpeg/`) gives the Emscripten module a proper execution context — `WebAssembly` is correctly available in the global scope.
+**The fix:** pass the same-origin `/public/ffmpeg/` paths **directly** to `ffmpeg.load()` — no `toBlobURL()` wrapping at all. The `useFFmpeg` hook enforces this rule permanently:
+
+```ts
+// ✅ Correct — same-origin paths passed directly
+await ffmpeg.load({
+  coreURL:  '/ffmpeg/ffmpeg-core.js',
+  wasmURL:  '/ffmpeg/ffmpeg-core.wasm',
+});
+
+// ❌ Never do this — blob: URL breaks WebAssembly global scope in the worker
+// const coreURL = await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript');
+```
 
 ### Cross-Origin Isolation (COEP/COOP)
 
@@ -109,7 +123,8 @@ apps/wasm-web/
 │   └── icons.svg
 │
 ├── src/
-│   ├── App.tsx                # Main component — load orchestration, convert logic, UI
+│   ├── App.tsx                # UI shell — convert pipeline, file handling, rendering
+│   ├── useFFmpeg.ts           # Custom hook — FFmpeg lifecycle state machine (idle→downloading→initializing→ready|error)
 │   ├── App.css                # App-level styles
 │   ├── index.css              # Global CSS variables and resets
 │   └── main.tsx               # React entry point
@@ -124,7 +139,8 @@ apps/wasm-web/
 
 | File | Purpose |
 |------|---------|
-| `src/App.tsx` | All application logic: FFmpeg load state machine, progress tracking, convert pipeline, cancel/retry handling |
+| `src/App.tsx` | UI shell: file handling, convert pipeline, rendering. Consumes `useFFmpeg`. |
+| `src/useFFmpeg.ts` | FFmpeg lifecycle hook: `idle → downloading → initializing → ready / error` state machine, progress tracking, exec, cancel/retry. Single source of truth for all FFmpeg state. |
 | `public/ffmpeg/ffmpeg-core.js` | The actual FFmpeg binary compiled to JavaScript via Emscripten. Do **not** edit. Regenerated by updating `@ffmpeg/core`. |
 | `public/ffmpeg/ffmpeg-core.wasm` | The WebAssembly binary. ~30 MB. Loaded once per session, cached by the browser. |
 | `vite.config.ts` | Sets COEP headers for dev server; excludes `@ffmpeg/ffmpeg` and `@ffmpeg/util` from Vite's pre-bundler |
@@ -139,7 +155,7 @@ apps/wasm-web/
 | `@ffmpeg-ui/ui` | All React components — `MediaEditor`, `DropZone`, `BatchQueue`, `TerminalOutput`, `SettingsPanel`, presets |
 | `@ffmpeg-ui/core` | `buildFFmpegArgs()` — converts UI options into an FFmpeg argument array |
 | `@ffmpeg/ffmpeg` | JS wrapper around the WASM worker — `FFmpeg` class, `ffmpeg.load()`, `ffmpeg.exec()` |
-| `@ffmpeg/util` | `fetchFile()`, `toBlobURL()` — file ingestion and blob URL helpers |
+| `@ffmpeg/util` | `fetchFile()` — reads a `File` object into a `Uint8Array` for writing to the WASM filesystem |
 
 ---
 
@@ -170,7 +186,7 @@ npm install @ffmpeg/core@<version> -D
 cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js apps/wasm-web/public/ffmpeg/
 cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm apps/wasm-web/public/ffmpeg/
 
-# 3. Update CORE_VERSION in src/App.tsx
+# 3. No code change required — the paths in useFFmpeg.ts are version-agnostic
 ```
 
 > ⚠️ `@ffmpeg/core` is in root `node_modules` (hoisted by npm workspaces). Run the copy from the repo root.
