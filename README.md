@@ -6,71 +6,70 @@
 <h1 align="center">FFmpeg UI</h1>
 
 <p align="center">
-  A beautifully designed, multi-platform frontend for FFmpeg.<br/>
-  Convert, remux, trim, and process media — visually, without touching the terminal.
+  A visual interface for FFmpeg. Convert, remux, trim, and process media without touching the terminal.
 </p>
 
 <p align="center">
-  <a href="https://ffmpeg-ui.vercel.app"><strong>🌐 Live Web App</strong></a> ·
-  <a href="https://github.com/bennypepper/FFmpeg-UI/releases/latest"><strong>⬇️ Download Desktop</strong></a> ·
-  <a href="https://github.com/bennypepper/FFmpeg-UI"><strong>📦 Source Code</strong></a>
+  <a href="https://ffmpeg-ui.vercel.app"><strong>Live web app</strong></a> ·
+  <a href="https://github.com/bennypepper/FFmpeg-UI/releases/latest"><strong>Download desktop</strong></a> ·
+  <a href="https://github.com/bennypepper/FFmpeg-UI"><strong>Source code</strong></a>
 </p>
 
 ---
 
-## What Is It?
+## What is it?
 
-FFmpeg UI is a **visual interface for FFmpeg** — the industry-standard open-source media processing engine. Instead of memorizing command flags and codec options, you get a clean, modern UI that builds and runs the commands for you.
+FFmpeg UI is a frontend for [FFmpeg](https://ffmpeg.org), the open-source media processing tool. Instead of writing command-line flags, you get a UI that builds and runs the commands for you.
 
-The project targets **three distinct deployment environments**, each suited to a different use case, while sharing the same React component library and FFmpeg command-building logic under the hood.
+It runs in three different environments, each suited to a different use case, but all sharing the same React component library and FFmpeg command-building logic.
 
 ---
 
 ## Platforms
 
-### 🖥️ Desktop — Native App (Tauri)
+### Desktop (Tauri)
 
-> Installable `.msi` / `.dmg` / `.AppImage` application powered by [Tauri v2](https://v2.tauri.app) and Rust.
+An installable native app (`.msi` / `.dmg` / `.AppImage`) built with [Tauri v2](https://v2.tauri.app) and Rust.
 
-- Accesses your **native file system** directly — no uploads, no file size limits
-- Bundles FFmpeg via **ffmpeg-sidecar** with auto-download if not installed
-- Native **OS notifications** on job completion
-- Persistent **settings** saved across sessions
+- Direct access to your file system — no uploads, no file size limits
+- Bundles FFmpeg via ffmpeg-sidecar; auto-downloads the binary if not already installed
+- Native OS notifications on job completion
+- Settings saved across sessions
 - Hardware acceleration selector (NVENC, VAAPI, VideoToolbox, etc.)
-- **Full batch queue** — process multiple files sequentially
+- Batch queue for processing multiple files
 
-📁 Source: [`apps/desktop/`](./apps/desktop/)  
-⬇️ Download: [GitHub Releases](https://github.com/bennypepper/FFmpeg-UI/releases/latest)
+Source: [`apps/desktop/`](./apps/desktop/)
+Download: [GitHub Releases](https://github.com/bennypepper/FFmpeg-UI/releases/latest)
 
 ---
 
-### 🌐 WebAssembly — Browser App
+### Browser (WebAssembly)
 
-> FFmpeg compiled to WASM, running **entirely inside your browser tab**. No server. No upload. Your files never leave your device.
+FFmpeg compiled to WASM, running inside your browser tab. No server involved. Files stay on your device.
 
-- Works on any modern browser — Chrome, Firefox, Edge, Safari
-- Powered by [`@ffmpeg/ffmpeg`](https://github.com/ffmpegwasm/ffmpeg.wasm) v0.12
-- Requires a one-time ~30 MB download of the WASM core on first load (with visible progress)
-- Enforces `Cross-Origin-Embedder-Policy: require-corp` for `SharedArrayBuffer` support
+- Works in Chrome, Firefox, Edge, and Safari
+- Uses [`@ffmpeg/ffmpeg`](https://github.com/ffmpegwasm/ffmpeg.wasm) v0.12
+- Requires a one-time ~30 MB WASM download on first load, with a visible progress bar
+- Requires `Cross-Origin-Embedder-Policy: require-corp` for `SharedArrayBuffer` support
 - Deployed to Vercel with the required isolation headers
 
-📁 Source: [`apps/wasm-web/`](./apps/wasm-web/)  
-🌐 Live: [ffmpeg-ui.vercel.app](https://ffmpeg-ui.vercel.app)
+Source: [`apps/wasm-web/`](./apps/wasm-web/)
+Live: [ffmpeg-ui.vercel.app](https://ffmpeg-ui.vercel.app)
 
 ---
 
-### 🐍 Local Server — Python Backend (Legacy)
+### Local server (Python, legacy)
 
-> The original self-hosted version. A Python Flask server exposes an API that processes media server-side. Ideal for NAS boxes, home servers, or headless machines.
+The original version. A Python Flask server processes media on the machine running it. Useful for home servers or headless setups.
 
-There are two sub-versions:
+Two sub-versions:
 
 | Version | Path | Description |
 |---|---|---|
-| **Legacy** | [`apps/local-server/`](./apps/local-server/) | Standalone Python backend + plain HTML/CSS/JS frontend. No build step required. |
-| **Modern Web UI** | [`apps/local-server-web/`](./apps/local-server-web/) | Same Python backend, but served with the unified React component library (`@ffmpeg-ui/ui`). |
+| Legacy | [`apps/local-server/`](./apps/local-server/) | Flask API + plain HTML/CSS/JS frontend. No build step. |
+| Modern web UI | [`apps/local-server-web/`](./apps/local-server-web/) | Same Flask API, served with the shared React UI package. |
 
-**Prerequisites:** Python 3.8+, FFmpeg on system PATH.
+Requirements: Python 3.8+, FFmpeg on system PATH.
 
 ```bash
 # Windows
@@ -86,7 +85,7 @@ start_converter.bat
 
 ## Features
 
-| Feature | Desktop | WASM | Local Server |
+| Feature | Desktop | WASM | Local server |
 |---|:---:|:---:|:---:|
 | Video conversion | ✅ | ✅ | ✅ |
 | Audio conversion | ✅ | ✅ | ✅ |
@@ -94,7 +93,7 @@ start_converter.bat
 | Thumbnail extraction | ✅ | ✅ | ✅ |
 | Merge / concatenate | ✅ | ✅ | ✅ |
 | Batch queue | ✅ | ✅ | ✅ |
-| Quick presets (TikTok, YouTube, Discord…) | ✅ | ✅ | ✅ |
+| Quick presets (TikTok, YouTube, Discord...) | ✅ | ✅ | ✅ |
 | Media info + preview | ✅ | ✅ | ✅ |
 | Hardware acceleration | ✅ | ❌ | Depends |
 | Native file system access | ✅ | ❌ | ✅ |
@@ -102,11 +101,11 @@ start_converter.bat
 | No installation needed | ❌ | ✅ | ❌ |
 | Files stay on your device | ✅ | ✅ | ✅ |
 
-> ¹ WASM requires an internet connection on first load to download the ~30 MB WASM core. After that, your browser may cache it.
+> ¹ WASM needs an internet connection on first load to download the ~30 MB core. After that it uses the browser cache.
 
 ---
 
-## How It Works
+## How it works
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -117,7 +116,7 @@ start_converter.bat
                         │ produces string[]
           ┌─────────────┼─────────────┐
           ▼             ▼             ▼
-   Desktop (Tauri)   WASM (Browser)  Local Server
+   Desktop (Tauri)   WASM (Browser)  Local server
    Rust sidecar      ffmpeg.exec()   Python subprocess
    spawns FFmpeg     runs in WASM    runs FFmpeg
    natively          worker thread   server-side
@@ -129,27 +128,27 @@ start_converter.bat
          Shared React components
          (MediaEditor, DropZone,
           BatchQueue, Terminal,
-          SettingsPanel, Presets…)
+          SettingsPanel, Presets...)
 ```
 
-The command logic lives in **`@ffmpeg-ui/core`** — a framework-agnostic TypeScript package. The UI lives in **`@ffmpeg-ui/ui`** — a React component library using CSS Modules with a glassmorphism-inspired design system. Every platform app (`desktop`, `wasm-web`, `local-server-web`) consumes both packages and handles its own backend bridge.
+The command logic lives in `@ffmpeg-ui/core`, a framework-agnostic TypeScript package. The UI lives in `@ffmpeg-ui/ui`, a React component library using CSS Modules with a glassmorphism design system. Each platform app (`desktop`, `wasm-web`, `local-server-web`) consumes both packages and handles its own backend.
 
 ---
 
-## Repository Structure
+## Repository structure
 
 ```
 FFmpeg-UI/
 ├── apps/
-│   ├── desktop/              # 🖥️  Tauri v2 + React 19 (native desktop)
-│   │   └── src-tauri/        #     Rust backend — commands, sidecar, plugins
-│   ├── wasm-web/             # 🌐  Vite + React 19 (WebAssembly browser app)
-│   ├── local-server/         # 🐍  Legacy: Flask API + plain HTML/CSS/JS
-│   └── local-server-web/     # 🐍  Modern: Flask API + React 19 UI
+│   ├── desktop/              # Tauri v2 + React 19 (native desktop)
+│   │   └── src-tauri/        #   Rust backend — commands, sidecar, plugins
+│   ├── wasm-web/             # Vite + React 19 (WebAssembly browser app)
+│   ├── local-server/         # Legacy: Flask API + plain HTML/CSS/JS
+│   └── local-server-web/     # Modern: Flask API + React 19 UI
 │
 ├── packages/
-│   ├── core/                 # 📦  @ffmpeg-ui/core — FFmpeg command builders (TypeScript)
-│   └── ui/                   # 🎨  @ffmpeg-ui/ui  — shared React components + CSS Modules
+│   ├── core/                 # @ffmpeg-ui/core — FFmpeg command builders (TypeScript)
+│   └── ui/                   # @ffmpeg-ui/ui  — shared React components + CSS Modules
 │
 ├── docs/
 │   ├── ARCHITECTURE_PRD.md   # Engineering notes and migration plan
@@ -162,7 +161,7 @@ FFmpeg-UI/
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
@@ -171,10 +170,10 @@ FFmpeg-UI/
 | Node.js | 18+ | All apps |
 | npm | 9+ | All apps |
 | Rust + Cargo | stable | Desktop only |
-| Python | 3.8+ | Local Server only |
-| FFmpeg | any | Local Server only |
+| Python | 3.8+ | Local server only |
+| FFmpeg | any | Local server only |
 
-> **Desktop (Tauri) prerequisites:** Follow the [Tauri v2 setup guide](https://v2.tauri.app/start/prerequisites/) for your OS. On Windows this means the Visual Studio C++ Build Tools and WebView2.
+> Desktop (Tauri) requires additional setup depending on your OS. See the [Tauri v2 prerequisites guide](https://v2.tauri.app/start/prerequisites/). On Windows that means the Visual Studio C++ Build Tools and WebView2.
 
 ---
 
@@ -185,38 +184,37 @@ git clone https://github.com/bennypepper/FFmpeg-UI.git
 cd FFmpeg-UI
 ```
 
-### 2. Install All Dependencies
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-This installs dependencies for all workspace packages (`apps/*` and `packages/*`) in a single command via npm workspaces.
+This installs dependencies for all workspace packages in one go via npm workspaces.
 
 ---
 
-### Running the WebAssembly App (Easiest)
+### Running the WASM app
 
 ```bash
-# Development server with COEP headers
 cd apps/wasm-web
 npm run dev
 ```
 
-Open `http://localhost:5173`. The WASM core (~30 MB) will download on first load — watch the progress bar in the app. Once the titlebar shows **🟢 Ready**, you can start converting files.
+Open `http://localhost:5173`. The WASM core (~30 MB) downloads on first load. Once the titlebar shows "Ready", you can start converting files.
 
-> ⚠️ The WASM core requires cross-origin isolation headers. The dev server in `vite.config.ts` already sets them. For production, `vercel.json` handles it.
+> The WASM core requires cross-origin isolation headers. The dev server in `vite.config.ts` already sets them. For production, `vercel.json` handles it.
 
 ---
 
-### Running the Desktop App
+### Running the desktop app
 
 ```bash
 cd apps/desktop
 npm run tauri dev
 ```
 
-On first launch on a machine without FFmpeg installed, the app will show a warning overlay and offer to automatically download the required binaries. The download is ~80 MB.
+On a machine without FFmpeg installed, the app will offer to download the required binaries (~80 MB) on first launch.
 
 **Building an installer:**
 
@@ -224,11 +222,11 @@ On first launch on a machine without FFmpeg installed, the app will show a warni
 npm run tauri build
 ```
 
-Output is in `apps/desktop/src-tauri/target/release/bundle/`.
+Output goes to `apps/desktop/src-tauri/target/release/bundle/`.
 
 ---
 
-### Running the Local Server (Legacy)
+### Running the local server
 
 ```bash
 cd apps/local-server
@@ -244,18 +242,18 @@ start_converter.bat        # starts Flask on http://localhost:5000
 
 ---
 
-### Running Everything (Monorepo Dev Mode)
+### Running everything
 
 ```bash
 # From repo root — starts all apps in parallel via Turborepo
 npm run dev
 ```
 
-> Note: Running `npm run dev` from the root will attempt to start all apps including the Tauri desktop app, which requires Rust toolchain to be installed.
+> This will also try to start the Tauri desktop app, which requires Rust. Skip it if you haven't set that up.
 
 ---
 
-## Tech Stack
+## Tech stack
 
 ### Desktop
 - [Tauri v2](https://v2.tauri.app) — Rust-based native app shell
@@ -266,26 +264,26 @@ npm run dev
 ### WebAssembly
 - [Vite 8](https://vite.dev) + React 19 + TypeScript
 - [`@ffmpeg/ffmpeg`](https://github.com/ffmpegwasm/ffmpeg.wasm) v0.12 — FFmpeg compiled to WASM
-- [`@ffmpeg/util`](https://github.com/ffmpegwasm/ffmpeg.wasm) — `toBlobURL`, `fetchFile` helpers
+- [`@ffmpeg/util`](https://github.com/ffmpegwasm/ffmpeg.wasm) — `fetchFile` helper
 
-### Shared Packages
-- **`@ffmpeg-ui/core`** — Pure TypeScript. No runtime dependencies. Builds FFmpeg argument arrays from structured options objects.
-- **`@ffmpeg-ui/ui`** — React 19 + CSS Modules. Zero external CSS frameworks. Premium glassmorphism design system with dark/light mode.
+### Shared packages
+- `@ffmpeg-ui/core` — pure TypeScript, no runtime dependencies. Builds FFmpeg argument arrays from structured options objects.
+- `@ffmpeg-ui/ui` — React 19 + CSS Modules. No external CSS frameworks. Glassmorphism design system with dark/light mode.
 
-### Monorepo Tooling
+### Monorepo tooling
 - [Turborepo](https://turbo.build) — parallel task runner with caching
 - npm workspaces — dependency hoisting and cross-package linking
 
 ---
 
-## Design System
+## Design system
 
-The UI is built on a bespoke CSS variable system — no Tailwind, no external component libraries. Key principles:
+The UI uses a custom CSS variable system with no Tailwind or external component libraries.
 
-- **Glassmorphism** — `backdrop-filter: blur()`, translucent panels
-- **Monochromatic palette** — light and dark modes via `[data-theme="dark"]` attribute
-- **CSS Modules** — scoped styles, zero class name collisions across packages
-- **Micro-animations** — hover states, progress bars, spinners all in vanilla CSS
+- Glassmorphism: `backdrop-filter: blur()`, translucent panels
+- Monochromatic palette with dark and light modes via `[data-theme="dark"]`
+- CSS Modules for scoped styles across packages
+- Micro-animations in vanilla CSS
 
 ---
 
@@ -297,5 +295,5 @@ MIT © [bennypepper](https://github.com/bennypepper)
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first.  
+Pull requests are welcome. For major changes, open an issue first.
 The architecture is documented in [`docs/ARCHITECTURE_PRD.md`](./docs/ARCHITECTURE_PRD.md).
