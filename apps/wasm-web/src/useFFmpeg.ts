@@ -159,7 +159,10 @@ export function useFFmpeg(): UseFFmpegReturn {
     await ffmpeg.exec(args);
 
     const data = await ffmpeg.readFile(outputName);
-    return new Blob([data as Uint8Array], { type: guessMimeType(outputName) });
+    // ffmpeg.readFile returns a Uint8Array backed by WASM SharedArrayBuffer.
+    // Blob() requires a plain ArrayBuffer — .slice() copies it into one.
+    const safeBuffer = (data as Uint8Array).slice().buffer as ArrayBuffer;
+    return new Blob([safeBuffer], { type: guessMimeType(outputName) });
   }, [appendLog]);
 
   const cancel = useCallback(() => {
