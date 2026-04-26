@@ -149,6 +149,8 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
         .iter()
         .map_err(|e| format!("Failed to create ffmpeg iterator: {}", e))?;
 
+    let mut done_emitted = false;
+
     for event in iter {
         match event {
             FfmpegEvent::Progress(progress) => {
@@ -211,6 +213,7 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
             }
 
             FfmpegEvent::Done => {
+                done_emitted = true;
                 let _ = app_clone.emit(
                     "log-update",
                     LogPayload {
@@ -223,6 +226,33 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
             }
 
             _ => {}
+        }
+    }
+
+    if !done_emitted {
+        let status = child
+            .as_inner_mut()
+            .wait()
+            .map_err(|e| format!("Failed to wait for ffmpeg: {}", e))?;
+
+        if status.success() {
+            let _ = app_clone.emit(
+                "log-update",
+                LogPayload {
+                    job_id: job_id_clone.clone(),
+                    level: "done".into(),
+                    message: format!("✅ Encode complete → {}", params.output_path),
+                },
+            );
+        } else {
+            let _ = app_clone.emit(
+                "log-update",
+                LogPayload {
+                    job_id: job_id_clone.clone(),
+                    level: "error".into(),
+                    message: format!("❌ Encode failed with status: {}", status),
+                },
+            );
         }
     }
 
