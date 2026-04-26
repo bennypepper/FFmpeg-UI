@@ -1216,10 +1216,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
 }
 
-/* Queue in overhaul: min 5 items visible (~52px each), no max-height cap */
+/* Queue in overhaul: fixed 260px inner-scroll zone (~5 items), never grows or shrinks */
 .app-layout-full .queue-list {
-  max-height: none;
+  max-height: 260px;
   min-height: 260px;
+  overflow-y: auto;
+}
+
+/* Batch card: size by content, don't stretch to fill flex parent */
+.app-layout-full .batch-card {
+  flex: 0 0 auto;
 }
 
 /* Inline format selector per queue item */
