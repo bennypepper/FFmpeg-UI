@@ -72,12 +72,12 @@ FFmpeg-UI/
 - [x] Build shared React components: File Uploader/Dropper, Format Selectors, Progress Bars, Output Logs, and the central Media Editor.
 - [x] Ensure the UI consumes the logic from `packages/core`.
 
-### 🔄 Phase 4: Platform Wiring & App Builds (In Progress)
+### 🔄 Phase 4: Platform Wiring & App Builds (Completed)
 - [x] **WASM Web:** Wire up the UI to `@ffmpeg/ffmpeg` to handle in-browser virtual file mapping and execution.
 - [x] **Desktop (Tauri):** Initialize Tauri, bundle standard FFmpeg binaries for Windows/Mac/Linux, map Rust `Command` APIs to the React frontend.
-- [ ] **Local Server:** Swap out the Vanilla HTML/JS with a production build of the React UI. Wire up the Python `subprocess` backend.
+- [x] **Local Server:** Swap out the Vanilla HTML/JS with a production build of the React UI. Wire up the Python `subprocess` backend.
 
 ### ⏳ Phase 5: Polish & Final Deployment
-- [ ] Unify error handling (dealing with specific WebAssembly memory limits vs. Desktop disk space limits).
-- [ ] Configure CI/CD actions for compiling the Tauri installers.
-- [ ] Final UI/UX review for "wow" factor aesthetics.
+- [x] Unify error handling (dealing with specific WebAssembly memory limits vs. Desktop disk space limits).
+- [x] Configure CI/CD actions for compiling the Tauri installers.
+- [x] Final UI/UX review for "wow" factor aesthetics.

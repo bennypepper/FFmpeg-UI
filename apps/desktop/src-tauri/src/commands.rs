@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
 
-// ─────────────────────────────────────────────
-// Payload structs (serialised → sent to JS)
-// ─────────────────────────────────────────────
+// Payload structs sent to JS
 
 #[derive(Serialize, Clone)]
 pub struct Capabilities {
@@ -13,7 +11,7 @@ pub struct Capabilities {
     pub version: String,
 }
 
-/// Emitted as `progress-update` Tauri event
+/// Emitted as `progress-update`
 #[derive(Serialize, Clone)]
 pub struct ProgressPayload {
     pub job_id: String,
@@ -25,11 +23,11 @@ pub struct ProgressPayload {
     pub bitrate_kbps: f32,
 }
 
-/// Emitted as `log-update` Tauri event
+/// Emitted as `log-update`
 #[derive(Serialize, Clone)]
 pub struct LogPayload {
     pub job_id: String,
-    pub level: String, // "info" | "warning" | "error" | "done" | "started"
+    pub level: String,
     pub message: String,
 }
 
@@ -39,18 +37,13 @@ pub struct ConvertParams {
     pub job_id: String,
     /// Absolute path to source file
     pub input_path: String,
-    /// Absolute path for the output file (caller constructs this)
     pub output_path: String,
-    /// FFmpeg args built by @ffmpeg-ui/core (everything except -i and output)
     pub args: Vec<String>,
 }
 
-// ─────────────────────────────────────────────
-// get_capabilities
-// ─────────────────────────────────────────────
+
 #[tauri::command]
 pub fn get_capabilities() -> Result<Capabilities, String> {
-    // First try system PATH
     let ffmpeg_version = Command::new("ffmpeg")
         .arg("-version")
         .output()
@@ -66,7 +59,6 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
 
     let has_ffmpeg_system = !ffmpeg_version.contains("Not found");
 
-    // If not on PATH, check ffmpeg-sidecar location (where auto_download puts it)
     let (has_ffmpeg, version) = if has_ffmpeg_system {
         (true, ffmpeg_version)
     } else {
@@ -75,21 +67,23 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
             .spawn()
         {
             Ok(mut child) => {
-                let output = child.wait_with_output();
-                match output {
-                    Ok(out) => {
-                        let s = String::from_utf8_lossy(&out.stdout);
+                match child.take_stdout() {
+                    Some(mut stdout) => {
+                        use std::io::Read;
+                        let mut s = String::new();
+                        let _ = stdout.read_to_string(&mut s);
                         let ver = s.lines().next().unwrap_or("ffmpeg (sidecar)").to_string();
+                        let _ = child.as_inner_mut().wait();
                         (true, ver)
                     }
-                    Err(_) => (false, "Not found".to_string()),
+                    None => (false, "Not found".to_string()),
                 }
             }
             Err(_) => (false, "Not found".to_string()),
         }
     };
 
-    let has_ffprobe = Command::new("ffprobe")
+    let has_ffprobe = Command::new(ffmpeg_sidecar::ffprobe::ffprobe_path())
         .arg("-version")
         .output()
         .map(|out| out.status.success())
@@ -102,12 +96,9 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
     })
 }
 
-// ─────────────────────────────────────────────
-// probe_file — calls real ffprobe, returns JSON string
-// ─────────────────────────────────────────────
 #[tauri::command]
 pub fn probe_file(path: String) -> Result<String, String> {
-    let output = Command::new("ffprobe")
+    let output = Command::new(ffmpeg_sidecar::ffprobe::ffprobe_path())
         .args([
             "-v",
             "quiet",
@@ -127,11 +118,6 @@ pub fn probe_file(path: String) -> Result<String, String> {
     }
 }
 
-// ─────────────────────────────────────────────
-// start_convert — the main conversion command
-// Spawns FFmpeg via ffmpeg-sidecar and streams
-// progress + log events back to the frontend.
-// ─────────────────────────────────────────────
 #[tauri::command]
 pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<String, String> {
     use ffmpeg_sidecar::command::FfmpegCommand;
@@ -139,7 +125,6 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
 
     let job_id = params.job_id.clone();
 
-    // Emit a "started" log so the terminal shows something immediately
     let _ = app.emit(
         "log-update",
         LogPayload {
@@ -152,15 +137,11 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
         },
     );
 
-    // Build the FFmpeg command:
-    // args from core package includes -i, input, all flags, and the output path.
     let mut child = FfmpegCommand::new()
         .args(&params.args)
         .spawn()
         .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
 
-    // Iterate over events on the current (async) thread.
-    // ffmpeg-sidecar's iterator is blocking, so we wrap in spawn_blocking.
     let job_id_clone = job_id.clone();
     let app_clone = app.clone();
 
@@ -179,7 +160,6 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
                         fps: progress.fps,
                         speed: progress.speed as f64,
                         size_kb: progress.size_kb as u64,
-                        // progress.time is a String like "00:01:23.45"
                         time_s: {
                             let t = &progress.time;
                             let parts: Vec<&str> = t.split(':').collect();
@@ -249,22 +229,11 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
     Ok(job_id.clone())
 }
 
-// ─────────────────────────────────────────────
-// cancel_job — kills an active ffmpeg process
-// (Basic implementation: SIGTERM / TerminateProcess via std::process)
-// In production this should use the JobRegistry above.
-// ─────────────────────────────────────────────
 #[tauri::command]
 pub fn cancel_job(_job_id: String) -> Result<(), String> {
-    // TODO: look up PID from a global JobRegistry and kill it.
-    // For now this is a no-op placeholder — the iterator loop will
-    // detect that the child exited and stop naturally.
     Ok(())
 }
 
-// ─────────────────────────────────────────────
-// download_ffmpeg — grabs pre-compiled binaries via sidecar
-// ─────────────────────────────────────────────
 #[tauri::command]
 pub async fn download_ffmpeg() -> Result<String, String> {
     ffmpeg_sidecar::download::auto_download()

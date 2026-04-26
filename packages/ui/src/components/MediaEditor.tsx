@@ -23,7 +23,7 @@ export interface MediaEditorProps {
   capabilities: { has_ffmpeg: boolean; version: string } | null;
   onAddFiles: () => void;
   onDropFiles: (files: File[]) => void;
-  onExecute: (options: CommandOptions, activeItem: MediaItem | null, queue: MediaItem[]) => void;
+  onExecute: (options: CommandOptions, activeItem: MediaItem | null, queue: MediaItem[], convertAll?: boolean) => void;
   onCancel: () => void;
   isProcessing: boolean;
   isDone: boolean;
@@ -159,7 +159,7 @@ export function MediaEditor(props: MediaEditorProps) {
                        activeItem.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i) ? (
                          <audio key={activeItem.previewUrl} controls src={activeItem.previewUrl} style={{ width: '80%' }} /> 
                        ) : activeItem.name.match(/\.(mp4|webm|mov)$/i) ? (
-                         <video key={activeItem.previewUrl} controls src={activeItem.previewUrl} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> 
+                         <video key={activeItem.previewUrl} controls src={activeItem.previewUrl} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transform: 'translateZ(0)', backfaceVisibility: 'hidden' }} /> 
                        ) : (
                          <div style={{ padding: '20px', color: '#999', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                            <ImageIcon size={32} style={{ opacity: 0.5 }} />
@@ -589,15 +589,26 @@ export function MediaEditor(props: MediaEditorProps) {
                <StopCircle size={16} /> Stop Task
              </button>
           )}
-          <button 
-            id="convert-btn" 
-            className="btn btn-primary" 
-            style={{ width: '100%', padding: '12px' }} 
-            onClick={() => onExecute(options, activeItem, queue)} 
-            disabled={isProcessing || queue.length === 0}
-          >
-            <Play size={16} /> {isProcessing ? "Processing..." : "Convert"}
-          </button>
+          {!isProcessing && (
+            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <button 
+                className="btn btn-primary" 
+                style={{ flex: 1, padding: '12px' }} 
+                onClick={() => onExecute(options, activeItem, queue, false)} 
+                disabled={isProcessing || queue.length === 0 || !activeItem}
+              >
+                <Play size={16} /> Convert Selected File
+              </button>
+              <button 
+                className="btn btn-primary" 
+                style={{ flex: 1, padding: '12px' }} 
+                onClick={() => onExecute(options, activeItem, queue, true)} 
+                disabled={isProcessing || queue.length === 0}
+              >
+                <Layers size={16} /> Convert All
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 

@@ -5,9 +5,7 @@ import { buildFFmpegArgs } from '@ffmpeg-ui/core';
 import type { CommandOptions } from '@ffmpeg-ui/core';
 import { useFFmpeg, type FFmpegStep } from './useFFmpeg';
 
-// ---------------------------------------------------------------------------
-// Step label map for the loading banner
-// ---------------------------------------------------------------------------
+
 const STEP_LABELS: Record<FFmpegStep, string> = {
   idle:         'Waiting…',
   downloading:  'Downloading WASM binary (~30 MB)…',
@@ -16,9 +14,7 @@ const STEP_LABELS: Record<FFmpegStep, string> = {
   error:        'Failed',
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+
 
 function probeHTML5(file: File): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
@@ -68,9 +64,7 @@ async function pickFiles(): Promise<File[]> {
   });
 }
 
-// ---------------------------------------------------------------------------
-// App
-// ---------------------------------------------------------------------------
+
 
 export default function App() {
   const { state, isReady, logs, progress, retry, exec, cancel } = useFFmpeg();
@@ -85,17 +79,15 @@ export default function App() {
 
   const isLoading = state.step === 'downloading' || state.step === 'initializing';
 
-  // Compute overall loading bar percentage
+
   const loadPct = (() => {
     if (state.step === 'ready')        return 100;
-    if (state.step === 'downloading')  return Math.round(state.downloadPct * 0.9); // 0-90%
-    if (state.step === 'initializing') return 90 + Math.round(state.downloadPct * 0.1); // 90-100%
+    if (state.step === 'downloading')  return Math.round(state.downloadPct * 0.9);
+    if (state.step === 'initializing') return 90 + Math.round(state.downloadPct * 0.1);
     return 0;
   })();
 
-  // ---------------------------------------------------------------------------
-  // File adding
-  // ---------------------------------------------------------------------------
+
 
   const buildItems = useCallback(async (files: File[]): Promise<MediaItem[]> => {
     return Promise.all(
@@ -121,22 +113,23 @@ export default function App() {
     setQueue(prev => [...prev, ...newItems]);
   }, [buildItems]);
 
-  // ---------------------------------------------------------------------------
-  // Execution
-  // ---------------------------------------------------------------------------
+
 
   const handleExecute = useCallback(async (
     opts: CommandOptions,
-    _activeItem: MediaItem | null,
+    activeItem: MediaItem | null,
     q: MediaItem[],
+    convertAll: boolean = false
   ) => {
     if (q.length === 0 || isProcessing || !isReady) return;
 
     setIsProcessing(true);
     setIsDone(false);
 
+    const itemsToProcess = convertAll ? q : (activeItem ? [activeItem] : [q[0]]);
+
     try {
-      for (const item of q) {
+      for (const item of itemsToProcess) {
         if (!item.file) continue;
 
         const inName  = item.name.replace(/\s+/g, '_');
@@ -166,13 +159,11 @@ export default function App() {
     }
   }, [isProcessing, isReady, exec]);
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Titlebar */}
+
       <div style={{
         height: '40px', background: 'var(--bg-panel)', display: 'flex',
         alignItems: 'center', justifyContent: 'space-between',
@@ -189,7 +180,23 @@ export default function App() {
         </span>
       </div>
 
-      {/* Loading progress banner */}
+      <div style={{
+        padding: '12px 20px',
+        background: 'var(--bg-warning, rgba(200, 100, 0, 0.1))',
+        borderBottom: '1px solid var(--border-warning, rgba(200, 100, 0, 0.3))',
+        color: 'var(--text-warning, #e67e22)',
+        fontSize: '0.8rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }}>
+        <span>⚠️</span>
+        <div>
+          <strong>Technology Demo:</strong> This WebAssembly version runs purely in the browser sandbox without hardware acceleration. Video conversions will be significantly slower than native processing. For full performance, hardware acceleration, and background processing, please use the <strong>Native Desktop App</strong>.
+        </div>
+      </div>
+
+
       {isLoading && (
         <div style={{
           padding: '10px 20px',
@@ -220,7 +227,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Error banner */}
+
       {state.step === 'error' && (
         <div style={{
           padding: '12px 20px',
@@ -244,7 +251,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main content */}
+
       <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         <MediaEditor
           capabilities={isReady ? { has_ffmpeg: true, version: '7.1' } : null}
