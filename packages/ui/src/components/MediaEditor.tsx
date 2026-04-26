@@ -373,7 +373,7 @@ export function MediaEditor(props: MediaEditorProps) {
             </div>
           </div>
 
-          <div className="queue-list" style={{ padding: 10, flex: 1, overflowY: 'auto', maxHeight: 'none' }}>
+          <div className="queue-list">
             {queue.length === 0 ? (
               <div className="queue-empty">Drop files above to add them to the queue</div>
             ) : (
