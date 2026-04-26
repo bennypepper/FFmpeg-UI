@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { TerminalOutput } from './TerminalOutput';
 import { SettingsModal } from './SettingsModal';
+import { AboutModal } from './AboutModal';
 import type { CommandOptions } from '@ffmpeg-ui/core';
 import {
   Film, Music, Sun, Moon, Upload, List, Plus, Archive, X,
   BarChart, Image as ImageIcon, AlertCircle, Play, CheckCircle,
-  StopCircle, Layers, Settings2
+  StopCircle, Layers, Settings2, HelpCircle
 } from 'lucide-react';
 
 export interface MediaItem {
@@ -36,6 +37,8 @@ export interface MediaEditorProps {
   setOptions: React.Dispatch<React.SetStateAction<CommandOptions>>;
   /** Set false on desktop (Tauri) where a native title bar already exists */
   showInternalHeader?: boolean;
+  /** Display name of the current platform, shown in the About modal */
+  platform?: string;
 }
 
 // ── File type detection ───────────────────────────────────────────
@@ -94,10 +97,12 @@ export function MediaEditor(props: MediaEditorProps) {
     queue, setQueue, activeFileId, setActiveFileId,
     mediaInfo, options, setOptions,
     showInternalHeader = true,
+    platform = 'Web',
   } = props;
 
   const [itemOptionsMap, setItemOptionsMap] = useState<Map<string, CommandOptions>>(new Map());
   const [modalItemId, setModalItemId]       = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen]           = useState(false);
   const [infoTab, setInfoTab]               = useState<'info' | 'preview'>('info');
   const [showLogs, setShowLogs]             = useState(false);
   const [showToast, setShowToast]           = useState(false);
@@ -203,6 +208,14 @@ export function MediaEditor(props: MediaEditorProps) {
                 {capabilities.has_ffmpeg ? '🟢' : '🔴'} {capabilities.version.split('-')[0].trim()}
               </span>
             )}
+            <button
+              className="btn btn-ghost"
+              title="About FFmpeg UI"
+              style={{ padding: '6px' }}
+              onClick={() => setAboutOpen(true)}
+            >
+              <HelpCircle size={16} />
+            </button>
             <button
               className="btn btn-ghost"
               title="Toggle theme"
@@ -486,6 +499,15 @@ export function MediaEditor(props: MediaEditorProps) {
           options={modalOpts}
           onChange={opts => setItemOpts(modalItem.id, opts)}
           onClose={() => setModalItemId(null)}
+        />
+      )}
+
+      {/* About Modal */}
+      {aboutOpen && (
+        <AboutModal
+          platform={platform}
+          ffmpegVersion={capabilities?.version ?? null}
+          onClose={() => setAboutOpen(false)}
         />
       )}
 
