@@ -128,7 +128,7 @@ export default function App() {
           merged.video_codec = vStream.codec_name;
           merged.width = vStream.width;
           merged.height = vStream.height;
-          // Note: r_frame_rate is usually a fraction like "30000/1001" or "60/1"
+          // r_frame_rate is usually a fraction like "30000/1001"
           if (vStream.r_frame_rate) {
              const parts = vStream.r_frame_rate.split('/');
              if (parts.length === 2 && parts[1] !== '0') {
@@ -155,58 +155,78 @@ export default function App() {
     else setMediaInfo(null);
   }, [activeFileId, queue]);
 
-  const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[]) => {
+  const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[], convertAll: boolean = false) => {
     if (q.length === 0 || isProcessing) return;
 
-    // For simplicity, process the activeItem if defined, or the first queue item.
-    const itemToProcess = activeItem || q[0];
-    if (!itemToProcess || !itemToProcess.path) return;
+    const itemsToProcess = convertAll ? q : (activeItem ? [activeItem] : [q[0]]);
+    if (itemsToProcess.length === 0) return;
 
-    const jobId = makeJobId();
-    currentJobId.current = jobId;
-    setIsProcessing(true);
-    setIsDone(false);
-    setProgress(null);
 
-    const sep = itemToProcess.path.includes('/') ? '/' : '\\';
-    const parts = itemToProcess.path.split(sep);
-    const rawName = parts[parts.length - 1];
-    const nameNoExt = rawName.replace(/\.[^\.]+$/, '');
-    parts[parts.length - 1] = nameNoExt + '_converted.' + opts.fmt;
-    const defaultOutputPath = parts.join(sep);
-
-    const selectedSavePath = await save({
-      defaultPath: defaultOutputPath,
-      filters: [{ name: 'Media', extensions: [opts.fmt] }],
+    const selectedDir = await open({
+      directory: true,
+      multiple: false,
+      title: 'Select Destination Folder'
     });
 
-    if (!selectedSavePath) {
-      setIsProcessing(false);
-      currentJobId.current = null;
-      return;
+    if (!selectedDir) return;
+
+    setIsProcessing(true);
+    setIsDone(false);
+
+
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      const itemToProcess = itemsToProcess[i];
+      if (!itemToProcess.path) continue;
+
+
+      setActiveFileId(itemToProcess.id);
+
+      const jobId = makeJobId();
+      currentJobId.current = jobId;
+      setProgress(null);
+
+      const sep = itemToProcess.path.includes('/') ? '/' : '\\';
+      const rawName = itemToProcess.path.split(sep).pop() || 'output';
+      const nameNoExt = rawName.replace(/\.[^\.]+$/, '');
+      
+
+      const outputPath = `${selectedDir}${sep}${nameNoExt}_converted.${opts.fmt}`;
+
+      const ffmpegArgs = buildFFmpegArgs({ ...opts, input: itemToProcess.path });
+      ffmpegArgs[ffmpegArgs.length - 1] = outputPath;
+
+      setTerminalLogs(prev => [...prev.slice(-199), `[Command] Processing ${i+1}/${itemsToProcess.length}: ffmpeg ${ffmpegArgs.join(' ')}`]);
+
+      try {
+        await invoke('start_convert', {
+          params: {
+            job_id: jobId,
+            input_path: itemToProcess.path,
+            output_path: outputPath,
+            args: ffmpegArgs,
+          },
+        });
+
+
+        await new Promise<void>((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (currentJobId.current !== jobId) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 300);
+        });
+
+      } catch (err) {
+        setTerminalLogs(prev => [...prev.slice(-199), '[Fatal] ' + err]);
+        break;
+      }
     }
 
-    const ffmpegArgs = buildFFmpegArgs({ ...opts, input: itemToProcess.path });
-    ffmpegArgs[ffmpegArgs.length - 1] = selectedSavePath; // Overwrite the final output path
 
-    setTerminalLogs(prev => [...prev.slice(-199), '[Command] ffmpeg ' + ffmpegArgs.join(' ')]);
-
-    try {
-      await invoke('start_convert', {
-        params: {
-          job_id: jobId,
-          input_path: itemToProcess.path, // kept for reference in backend if needed
-          output_path: selectedSavePath,
-          args: ffmpegArgs,
-        },
-      });
-      // Completion state is handled by the 'log-update' event listener
-      // which fires on FfmpegEvent::Done. No need to duplicate here.
-    } catch (err) {
-      setTerminalLogs(prev => [...prev.slice(-199), '[Fatal] ' + err]);
-      setIsProcessing(false);
-      currentJobId.current = null;
-    }
+    setIsProcessing(false);
+    setIsDone(true);
+    sendNotification({ title: 'FFmpeg UI', body: '✅ All conversions completed successfully!' });
   };
 
   const handleAddFiles = async () => {
@@ -249,7 +269,7 @@ export default function App() {
   return (
     <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', userSelect: 'none' }}>
       
-      {/* Custom Titlebar Region */}
+
       <div 
         data-tauri-drag-region 
         style={{ 
@@ -267,7 +287,7 @@ export default function App() {
         )}
       </div>
 
-      {/* ── FFmpeg Missing Overlay ── */}
+
       {(showMissingOverlay || showDownloadingOverlay) && (
         <div style={{
           position: 'absolute',
