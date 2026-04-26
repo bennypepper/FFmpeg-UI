@@ -108,7 +108,7 @@ export default function App() {
     });
   };
 
-  const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[]) => {
+  const handleExecute = async (opts: CommandOptions, activeItem: MediaItem | null, q: MediaItem[], convertAll: boolean = false) => {
     if (q.length === 0 || isProcessing) return;
 
     setIsProcessing(true);
@@ -134,7 +134,8 @@ export default function App() {
         currentJobId.current = jobId;
         await streamJobProgress(jobId);
       } else {
-        for (const item of q) {
+        const itemsToProcess = convertAll ? q : (activeItem ? [activeItem] : q.slice(0, 1));
+        for (const item of itemsToProcess) {
           if (!item.path) continue;
 
           const args = buildFFmpegArgs({ ...opts, input: item.path });
@@ -150,10 +151,10 @@ export default function App() {
               args: args
             })
           });
-          
+
           const data = await res.json();
           if (data.error) throw new Error(data.error);
-          
+
           const jobId = data.job_id;
           currentJobId.current = jobId;
           await streamJobProgress(jobId);
