@@ -84,7 +84,6 @@ export default function App() {
 
       const u2 = await listen<LogPayload>('log-update', e => {
         if (e.payload.job_id !== currentJobId.current) return;
-        const prefix = 'info'; 
         setTerminalLogs(prev => [...prev.slice(-199), '[' + e.payload.level + '] ' + e.payload.message]);
         
         if (e.payload.level === 'done') {
@@ -438,6 +437,7 @@ export default function App() {
           mediaInfo={mediaInfo}
           options={options}
           setOptions={setOptions}
+          showInternalHeader={false}
         />
       </div>
     </div>
