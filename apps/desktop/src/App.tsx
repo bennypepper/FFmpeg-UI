@@ -4,7 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { Store } from '@tauri-apps/plugin-store';
 import { sendNotification } from '@tauri-apps/plugin-notification';
-import { MediaEditor } from '@ffmpeg-ui/ui';
+import { MediaEditor, AboutModal } from '@ffmpeg-ui/ui';
 import type { MediaItem } from '@ffmpeg-ui/ui';
 import { buildFFmpegArgs } from '@ffmpeg-ui/core';
 import type { CommandOptions } from '@ffmpeg-ui/core';
@@ -36,6 +36,7 @@ function makeJobId(): string {
 }
 
 export default function App() {
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [queue, setQueue] = useState<MediaItem[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -266,6 +267,7 @@ export default function App() {
   const showDownloadingOverlay = isDownloadingEngine;
 
   return (
+    <>
     <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', userSelect: 'none' }}>
       
 
@@ -280,8 +282,23 @@ export default function App() {
           FFmpeg UI <span style={{ color: 'var(--accent-primary)', fontSize: '0.8em', marginLeft: '4px' }}>NATIVE</span>
         </span>
         {capabilities && (
-          <span style={{ fontSize: '0.75rem', opacity: 0.5, pointerEvents: 'none' }}>
-            {capabilities.has_ffmpeg ? '🟢' : '🔴'} {capabilities.version.split('-')[0].trim()}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
+            <span style={{ fontSize: '0.70rem', opacity: 0.5 }}>
+              {capabilities.has_ffmpeg ? '🟢' : '🔴'} {capabilities.version.split('-')[0].trim()}
+            </span>
+            <button
+              onClick={() => setAboutOpen(true)}
+              title="About FFmpeg UI"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px',
+                borderRadius: 4, color: 'var(--text-2, #999)', fontSize: '0.72rem',
+                fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4,
+              }}
+              onMouseOver={e => (e.currentTarget.style.color = 'var(--text-1, #fff)')}
+              onMouseOut={e => (e.currentTarget.style.color = 'var(--text-2, #999)')}
+            >
+              ?
+            </button>
           </span>
         )}
       </div>
@@ -441,6 +458,15 @@ export default function App() {
         />
       </div>
     </div>
+
+    {aboutOpen && (
+      <AboutModal
+        platform="Desktop (Tauri)"
+        ffmpegVersion={capabilities?.version ?? null}
+        onClose={() => setAboutOpen(false)}
+      />
+    )}
+    </>
   );
 }
 

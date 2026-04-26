@@ -224,6 +224,7 @@ export default function App() {
              mediaInfo={activeFileId ? queue.find(q => q.id === activeFileId)?.probe : null}
              options={options}
              setOptions={setOptions}
+             platform="Web (Local Server)"
           />
        </div>
     </div>
