@@ -1,63 +1,54 @@
-#!/bin/bash
-# ============================================================================
-#  All-in-One FFmpeg Web UI Project Installer (macOS & Linux)
-# ============================================================================
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 echo "======================================================================="
-echo "     FFmpeg Web UI - Automatic Dependency Installer"
+echo "     FFmpeg UI Local Server - Dependency Setup (macOS / Linux)"
 echo "======================================================================="
 echo ""
-echo "This script will check for and install the required software."
-echo "You may be prompted for your password to install packages via sudo."
-echo ""
-read -p "Press [Enter] to continue..."
 
-OS="$(uname -s)"
-
-# 1. Update package lists
-echo ""
-echo "[Step 1/3] Updating package managers..."
-if [ "$OS" = "Darwin" ]; then
-    if ! command -v brew &> /dev/null; then
-        echo "Homebrew not found. Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        brew update
-    fi
-elif [ -x "$(command -v apt-get)" ]; then
-    sudo apt-get update
-elif [ -x "$(command -v dnf)" ]; then
-    sudo dnf check-update
-elif [ -x "$(command -v pacman)" ]; then
-    sudo pacman -Sy
+# 1. Check Python 3
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[ERROR] python3 was not found on PATH."
+    echo "Install Python 3.11+ using your system package manager:"
+    echo "  macOS : brew install python"
+    echo "  Debian: sudo apt-get install -y python3 python3-venv"
+    echo "  Fedora: sudo dnf install -y python3"
+    exit 1
 fi
+echo "[Step 1/3] Found $(python3 --version)"
 
-# 2. Check for and Install Python & FFmpeg
+# 2. Check FFmpeg / FFprobe
 echo ""
-echo "[Step 2/3] Installing Python 3 and FFmpeg..."
-if [ "$OS" = "Darwin" ]; then
-    brew install python ffmpeg
-elif [ -x "$(command -v apt-get)" ]; then
-    sudo apt-get install -y python3 python3-pip ffmpeg
-elif [ -x "$(command -v dnf)" ]; then
-    sudo dnf install -y python3 python3-pip ffmpeg
-elif [ -x "$(command -v pacman)" ]; then
-    sudo pacman -S --noconfirm python python-pip ffmpeg
-fi
-
-# 3. Install Python Libraries (Flask & Flask-CORS)
-echo ""
-echo "[Step 3/3] Installing required Python libraries (Flask and Flask-CORS)..."
-if command -v pip3 &> /dev/null; then
-    pip3 install Flask Flask-CORS --break-system-packages 2>/dev/null || pip3 install Flask Flask-CORS
+echo "[Step 2/3] Checking FFmpeg and FFprobe..."
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "[WARNING] ffmpeg was not found on PATH."
+    echo "Install FFmpeg using your system package manager:"
+    echo "  macOS : brew install ffmpeg"
+    echo "  Debian: sudo apt-get install -y ffmpeg"
+    echo "  Fedora: sudo dnf install -y ffmpeg"
 else
-    pip install Flask Flask-CORS --break-system-packages 2>/dev/null || pip install Flask Flask-CORS
+    echo "Found $(ffmpeg -version | head -n 1)"
 fi
+
+if ! command -v ffprobe >/dev/null 2>&1; then
+    echo "[WARNING] ffprobe was not found on PATH."
+fi
+
+# 3. Create venv and install pinned dependencies from requirements.txt
+echo ""
+echo "[Step 3/3] Creating virtual environment (.venv) and installing requirements..."
+if [ ! -x ".venv/bin/python" ]; then
+    python3 -m venv .venv
+fi
+
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
 
 echo ""
 echo "======================================================================="
-echo "  Installation Complete! All dependencies are now installed."
+echo "  Setup Complete!"
+echo "  Start the server with: bash start_converter.sh"
+echo "  Note: Build the web UI first from repo root with: npm run build"
 echo "======================================================================="
-echo ""
-echo "You can now start the application by running: bash start_converter.sh"
-echo ""
