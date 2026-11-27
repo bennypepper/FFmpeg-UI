@@ -24,7 +24,7 @@ jobs:
           - platform: ubuntu-22.04
             args: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Tauri Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
