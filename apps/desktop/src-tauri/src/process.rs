@@ -21,6 +21,7 @@ pub fn exe_name(base: &str) -> String {
 /// Creates a `std::process::Command` with `CREATE_NO_WINDOW` set on Windows so
 /// background FFmpeg/FFprobe spawns never flash a black console window.
 pub fn new_command<S: AsRef<OsStr>>(program: S) -> Command {
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
     let mut cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {
