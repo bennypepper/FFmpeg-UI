@@ -16,4 +16,10 @@ export default defineConfig([
       globals: globals.es2020,
     },
   },
+  {
+    files: ['**/__tests__/**/*.ts', '**/*.test.ts'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])
