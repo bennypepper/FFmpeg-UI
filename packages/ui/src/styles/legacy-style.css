@@ -314,6 +314,9 @@ body, html {
   border-color: var(--text-1);
   background: var(--active-glow);
 }
+.drop-zone > * {
+  pointer-events: none;
+}
 .drop-zone input[type="file"] {
   position: absolute;
   inset: 0;
@@ -947,6 +950,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
 /* ── Responsive ──────────────────────────── */
 @media (max-width: 768px) {
+  .main-top    { grid-template-columns: 1fr; }
   .top-grid    { grid-template-columns: 1fr; }
   .mode-btn    { min-width: 80px; font-size: .72rem; padding: 8px 10px; }
   .settings-tabs { overflow-x: auto; }
@@ -1383,4 +1387,20 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .app-layout-full .presets-bar {
   padding: 8px 14px; border-radius: var(--r); margin-bottom: 0; gap: 8px;
 }
+
+.preset-btn:disabled,
+.mode-btn:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+.progress-dock {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  padding: 10px 20px;
+  flex-shrink: 0;
+}
+
 

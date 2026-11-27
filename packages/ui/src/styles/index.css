@@ -1,20 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+/* All fonts are local system fonts — 100% offline-safe, zero network requests */
 
 :root {
-  /* Legacy Monochromatic Light Theme */
+  /* Monochromatic Light Theme */
   --bg-color: #f7f7f7;
+  --bg-dark: #ededed;
   --bg-dot: #e5e5e5;
   --bg-panel: #ffffff;
   --bg-panel-hover: #fafafa;
   --bg-glass: rgba(255, 255, 255, 0.90);
-  
+
   --border-light: #e5e5e5;
   --border-focus: #171717;
 
   --accent-primary: #171717;
   --accent-primary-fg: #ffffff;
-  --accent-glow: rgba(0,0,0,0.08);
-  
+  --accent-gradient: linear-gradient(135deg, #171717 0%, #404040 100%);
+  --accent-glow: rgba(0, 0, 0, 0.08);
+
   --text-primary: #171717;
   --text-secondary: #525252;
   --text-tertiary: #a3a3a3;
@@ -22,6 +24,9 @@
   --success: #16a34a;
   --danger: #dc2626;
   --warning: #b45309;
+  --bg-warning: rgba(180, 83, 9, 0.08);
+  --border-warning: rgba(180, 83, 9, 0.28);
+  --text-warning: #92400e;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -29,38 +34,44 @@
   --radius-xl: 24px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 2px 12px rgba(0,0,0,0.05);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.08);
-  --shadow-glass: 0 8px 40px rgba(0,0,0,0.08);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.08);
+  --shadow-glass: 0 8px 40px rgba(0, 0, 0, 0.08);
 
   --transition-fast: 0.18s ease;
   --transition-smooth: 0.3s ease;
-  
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Arial, sans-serif;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 [data-theme='dark'] {
-  /* Legacy Monochromatic Dark Theme */
+  /* Monochromatic Dark Theme */
   --bg-color: #121212;
+  --bg-dark: #0d0d0d;
   --bg-dot: #333333;
-  --bg-panel: rgba(30,30,30,0.75);
-  --bg-panel-hover: rgba(38,38,38,0.70);
-  --bg-glass: rgba(23,23,23,0.90);
-  
+  --bg-panel: rgba(30, 30, 30, 0.75);
+  --bg-panel-hover: rgba(38, 38, 38, 0.70);
+  --bg-glass: rgba(23, 23, 23, 0.90);
+
   --border-light: #2a2a2a;
   --border-focus: #f5f5f5;
 
   --accent-primary: #f5f5f5;
   --accent-primary-fg: #171717;
-  --accent-glow: rgba(255,255,255,0.08);
-  
+  --accent-gradient: linear-gradient(135deg, #f5f5f5 0%, #d4d4d4 100%);
+  --accent-glow: rgba(255, 255, 255, 0.08);
+
   --text-primary: #f5f5f5;
   --text-secondary: #a3a3a3;
-  --text-tertiary: #525252;
+  --text-tertiary: #737373;
 
-  --shadow-sm: 0 2px 12px rgba(0,0,0,0.35);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.50);
-  --shadow-glass: 0 8px 40px rgba(0,0,0,0.50);
+  --bg-warning: rgba(245, 158, 11, 0.12);
+  --border-warning: rgba(245, 158, 11, 0.32);
+  --text-warning: #fbbf24;
+
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.50);
+  --shadow-glass: 0 8px 40px rgba(0, 0, 0, 0.50);
 }
 
 body {
@@ -99,18 +110,18 @@ h1, h2, h3, h4 {
   box-shadow: 0 0 0 3px var(--border-focus);
 }
 
-/* Scrollbar */
+/* Scrollbar (theme-aware contrast for both light & dark) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-dark); 
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1); 
+  background: var(--border-2, rgba(0, 0, 0, 0.22));
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.2); 
+  background: var(--text-2, rgba(0, 0, 0, 0.38));
 }

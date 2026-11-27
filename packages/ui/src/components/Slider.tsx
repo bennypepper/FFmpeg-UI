@@ -1,4 +1,5 @@
-import React, { InputHTMLAttributes } from 'react';
+import { useId } from 'react';
+import type { InputHTMLAttributes } from 'react';
 import styles from '../styles/Slider.module.css';
 
 export interface SliderProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -6,19 +7,25 @@ export interface SliderProps extends InputHTMLAttributes<HTMLInputElement> {
   valueDisplay?: string | number;
 }
 
-export function Slider({ label, valueDisplay, className = '', ...props }: SliderProps) {
+export function Slider({ label, valueDisplay, className = '', id, ...props }: SliderProps) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+
   return (
     <div className={`${styles.container} ${className}`}>
       <div className={styles.header}>
-        <label className={styles.label}>{label}</label>
+        <label className={styles.label} htmlFor={inputId}>
+          {label}
+        </label>
         <div className={styles.value}>
           {valueDisplay !== undefined ? valueDisplay : props.value}
         </div>
       </div>
-      <input 
-        type="range" 
-        className={styles.input} 
-        {...props} 
+      <input
+        id={inputId}
+        type="range"
+        className={styles.input}
+        {...props}
       />
     </div>
   );

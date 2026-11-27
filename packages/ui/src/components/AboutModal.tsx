@@ -1,4 +1,5 @@
-import React from 'react';
+import { useEffect } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { X, ExternalLink, Terminal, Monitor, Globe, Server, Code2 } from 'lucide-react';
 
 export interface AboutModalProps {
@@ -6,9 +7,11 @@ export interface AboutModalProps {
   /** e.g. "Desktop (Tauri)" | "Web (WebAssembly)" | "Web (Local Server)" */
   platform: string;
   ffmpegVersion?: string | null;
+  /** Optional external URL opener (e.g. Tauri opener plugin) */
+  onOpenExternalUrl?: (url: string) => void;
 }
 
-const LINK_STYLE: React.CSSProperties = {
+const LINK_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
@@ -29,25 +32,35 @@ function LinkRow({
   icon,
   label,
   sub,
+  onOpenExternalUrl,
 }: {
   href: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   sub: string;
+  onOpenExternalUrl?: (url: string) => void;
 }) {
+  const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (onOpenExternalUrl) {
+      e.preventDefault();
+      onOpenExternalUrl(href);
+    }
+  };
+
   return (
     <a
       href={href}
       target="_blank"
-      rel="noreferrer noopener"
+      rel="noopener noreferrer"
       style={LINK_STYLE}
+      onClick={handleClick}
       onMouseOver={e => {
-        (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border-2)';
-        (e.currentTarget as HTMLAnchorElement).style.background = 'var(--glass-3)';
+        e.currentTarget.style.borderColor = 'var(--border-2)';
+        e.currentTarget.style.background = 'var(--glass-3)';
       }}
       onMouseOut={e => {
-        (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)';
-        (e.currentTarget as HTMLAnchorElement).style.background = 'var(--glass-2)';
+        e.currentTarget.style.borderColor = 'var(--border)';
+        e.currentTarget.style.background = 'var(--glass-2)';
       }}
     >
       <span style={{ color: 'var(--text-2)', display: 'flex', flexShrink: 0 }}>{icon}</span>
@@ -66,12 +79,20 @@ function PlatformIcon({ platform }: { platform: string }) {
   return <Globe size={12} />;
 }
 
-export function AboutModal({ onClose, platform, ffmpegVersion }: AboutModalProps) {
-  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
+export function AboutModal({ onClose, platform, ffmpegVersion, onOpenExternalUrl }: AboutModalProps) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const handleBackdrop = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
 
-  const badgeStyle: React.CSSProperties = {
+  const badgeStyle: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 5,
@@ -82,7 +103,7 @@ export function AboutModal({ onClose, platform, ffmpegVersion }: AboutModalProps
     background: 'var(--glass-2)',
     border: '1px solid var(--border)',
     color: 'var(--text-2)',
-    whiteSpace: 'nowrap' as const,
+    whiteSpace: 'nowrap',
   };
 
   return (
@@ -90,32 +111,49 @@ export function AboutModal({ onClose, platform, ffmpegVersion }: AboutModalProps
       <div
         className="modal-container"
         style={{ maxWidth: 420 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="about-modal-title"
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
         <div className="modal-header">
           <div className="modal-header-left">
-            <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🎬</span>
+            <span style={{ fontSize: '1.4rem', lineHeight: 1 }} aria-hidden="true">🎬</span>
             <div>
-              <div className="modal-title" style={{ fontSize: '.92rem' }}>FFmpeg UI</div>
+              <div id="about-modal-title" className="modal-title" style={{ fontSize: '.92rem' }}>
+                FFmpeg UI
+              </div>
               <div className="modal-subtitle">A visual frontend for FFmpeg</div>
             </div>
           </div>
-          <button className="modal-close-btn" onClick={onClose} title="Close">
+          <button
+            type="button"
+            className="modal-close-btn"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close about dialog"
+          >
             <X size={15} />
           </button>
         </div>
 
         {/* ── Body ── */}
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
           {/* Platform + FFmpeg version badges */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span style={badgeStyle}>
               <PlatformIcon platform={platform} /> {platform}
             </span>
             {ffmpegVersion && (
-              <span style={{ ...badgeStyle, color: 'var(--success)', borderColor: 'rgba(22,163,74,.3)', background: 'rgba(22,163,74,.06)' }}>
+              <span
+                style={{
+                  ...badgeStyle,
+                  color: 'var(--success)',
+                  borderColor: 'rgba(22,163,74,.3)',
+                  background: 'rgba(22,163,74,.06)',
+                }}
+              >
                 🟢 FFmpeg {ffmpegVersion.split('-')[0].trim()}
               </span>
             )}
@@ -124,8 +162,8 @@ export function AboutModal({ onClose, platform, ffmpegVersion }: AboutModalProps
           {/* Description */}
           <p style={{ fontSize: '.78rem', color: 'var(--text-2)', lineHeight: 1.75, margin: 0 }}>
             Convert, remux, trim, and process media files without touching the terminal.
-            Runs natively on desktop via Tauri, or directly in the browser using WebAssembly.
-            All FFmpeg command building is handled for you.
+            Runs natively on desktop via Tauri, on a local server, or directly in the browser using WebAssembly.
+            All FFmpeg command building is validated and handled for you.
           </p>
 
           {/* Links */}
@@ -135,35 +173,43 @@ export function AboutModal({ onClose, platform, ffmpegVersion }: AboutModalProps
               icon={<Code2 size={15} />}
               label="GitHub Repository"
               sub="github.com/bennypepper/FFmpeg-UI"
+              onOpenExternalUrl={onOpenExternalUrl}
             />
             <LinkRow
               href="https://ffmpeg.org"
               icon={<Terminal size={15} />}
               label="Powered by FFmpeg"
               sub="Open-source multimedia framework"
+              onOpenExternalUrl={onOpenExternalUrl}
             />
           </div>
 
           {/* Footer: author + license */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingTop: 14,
-            borderTop: '1px solid var(--border)',
-            fontSize: '.68rem',
-            color: 'var(--text-3)',
-          }}>
-            <span>By <strong style={{ color: 'var(--text-2)' }}>Benedict Pepper</strong></span>
-            <span style={{
-              padding: '2px 8px',
-              borderRadius: 4,
-              background: 'var(--glass-2)',
-              border: '1px solid var(--border)',
-              fontSize: '.62rem',
-              fontWeight: 600,
-              letterSpacing: '.05em',
-            }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingTop: 14,
+              borderTop: '1px solid var(--border)',
+              fontSize: '.68rem',
+              color: 'var(--text-3)',
+            }}
+          >
+            <span>
+              By <strong style={{ color: 'var(--text-2)' }}>Benedict Pepper</strong>
+            </span>
+            <span
+              style={{
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: 'var(--glass-2)',
+                border: '1px solid var(--border)',
+                fontSize: '.62rem',
+                fontWeight: 600,
+                letterSpacing: '.05em',
+              }}
+            >
               MIT License
             </span>
           </div>

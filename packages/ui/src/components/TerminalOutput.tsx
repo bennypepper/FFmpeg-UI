@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import styles from '../styles/TerminalOutput.module.css';
 
 export interface TerminalOutputProps {
@@ -10,7 +10,6 @@ export function TerminalOutput({ logs, title = 'FFmpeg Output' }: TerminalOutput
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Auto-scroll to bottom on new logs
     if (contentRef.current) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
@@ -21,7 +20,7 @@ export function TerminalOutput({ logs, title = 'FFmpeg Output' }: TerminalOutput
       <div className={styles.header}>
         <div className={styles.title}>{title}</div>
       </div>
-      <div className={styles.content} ref={contentRef}>
+      <div className={styles.content} ref={contentRef} role="log" aria-live="polite">
         {logs.length === 0 ? (
           <span style={{ opacity: 0.5 }}>Waiting for command execution...</span>
         ) : (
