@@ -4,7 +4,7 @@ import { TerminalOutput } from './TerminalOutput';
 import { SettingsModal } from './SettingsModal';
 import { AboutModal } from './AboutModal';
 import { getPlatformCapabilities, reconcileOptionsForFormat } from '@ffmpeg-ui/core';
-import type { CommandOptions, RuntimePlatform, VideoCodec } from '@ffmpeg-ui/core';
+import type { AudioCodec, CommandOptions, RuntimePlatform, VideoCodec } from '@ffmpeg-ui/core';
 import {
   Film,
   Music,
@@ -362,10 +362,20 @@ export function MediaEditor(props: MediaEditorProps) {
     if (preset.opts.vc && !platformCaps.videoCodecs.includes(preset.opts.vc as VideoCodec)) {
       return platformCaps.disabledReasons.videoCodecs[preset.opts.vc] ?? 'Unavailable on this platform';
     }
+    if (preset.opts.ac && !platformCaps.audioCodecs.includes(preset.opts.ac as AudioCodec)) {
+      return platformCaps.disabledReasons.audioCodecs[preset.opts.ac] ?? 'Unavailable on this platform';
+    }
     if (
       preset.type === 'video' &&
       preset.opts.fmt &&
       !platformCaps.videoContainers.includes(preset.opts.fmt)
+    ) {
+      return platformCaps.disabledReasons.containers[preset.opts.fmt] ?? 'Unavailable on this platform';
+    }
+    if (
+      preset.type === 'audio' &&
+      preset.opts.fmt &&
+      !platformCaps.audioContainers.includes(preset.opts.fmt)
     ) {
       return platformCaps.disabledReasons.containers[preset.opts.fmt] ?? 'Unavailable on this platform';
     }
@@ -847,7 +857,7 @@ export function MediaEditor(props: MediaEditorProps) {
               <button type="button" className="btn btn-secondary btn-sm" onClick={onAddFiles}>
                 <Plus size={12} style={{ marginRight: 4 }} /> Add
               </button>
-              {!showInternalHeader && (
+              {!showInternalHeader && !onToggleTheme && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"

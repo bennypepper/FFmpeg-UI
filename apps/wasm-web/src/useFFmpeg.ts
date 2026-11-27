@@ -99,10 +99,19 @@ function formatStderrSummary(lines: string[]): string {
   return meaningful.slice(-5).join(' | ');
 }
 
+function usesLibopus(args: string[], vfsOutputName: string): boolean {
+  return (
+    args.includes('libopus') ||
+    args.includes('opus') ||
+    /\.(ogg|opus)$/i.test(vfsOutputName)
+  );
+}
+
 export function useFFmpeg(): UseFFmpegReturn {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const mountedRef = useRef(false);
   const initIdRef = useRef(0);
+  const workerJobCountRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const initPromiseRef = useRef<Promise<void> | null>(null);
   const activeJobStderrRef = useRef<string[] | null>(null);
@@ -136,6 +145,7 @@ export function useFFmpeg(): UseFFmpegReturn {
 
       const ffmpeg = new FFmpeg();
       ffmpegRef.current = ffmpeg;
+      workerJobCountRef.current = 0;
 
       ffmpeg.on('log', ({ message }) => {
         if (!mountedRef.current || initId !== initIdRef.current) return;
@@ -272,6 +282,13 @@ export function useFFmpeg(): UseFFmpegReturn {
         await initPromiseRef.current;
       }
 
+      // Single-threaded @ffmpeg/core@0.12.6 can hit Emscripten heap OOB when encoding
+      // libopus/ogg after a previous encode in the same worker; recycle proactively.
+      if (ffmpegRef.current && workerJobCountRef.current > 0 && usesLibopus(args, vfsOutputName)) {
+        appendLog('[FFmpeg] Refreshing WebAssembly worker for clean libopus encode…');
+        await startInitialization();
+      }
+
       const ffmpeg = ffmpegRef.current;
       if (!ffmpeg) {
         throw new Error('FFmpeg WebAssembly engine is not ready.');
@@ -294,6 +311,7 @@ export function useFFmpeg(): UseFFmpegReturn {
           throw new FFmpegCancelledError();
         }
 
+        workerJobCountRef.current += 1;
         appendLog(`[FFmpeg] Running: ffmpeg ${args.join(' ')}`);
         const exitCode = await ffmpeg.exec(args);
 

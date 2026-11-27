@@ -1194,6 +1194,12 @@ def _run_job(
 
         drain_thread.join(timeout=3)
 
+        # Remove temporary helper files (e.g. concat lists) before publishing
+        # terminal job state so callers observing status=="done" never see them.
+        if cleanup_paths:
+            for extra in cleanup_paths:
+                extra.unlink(missing_ok=True)
+
         if _is_cancelled():
             out_path.unlink(missing_ok=True)
             _upd(status="cancelled", done=True, error="Cancelled", finished_at=time.time())
