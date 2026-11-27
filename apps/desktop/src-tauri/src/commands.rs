@@ -1,129 +1,176 @@
-use serde::{Deserialize, Serialize};
-use std::process::Command;
-use tauri::{AppHandle, Emitter};
+use crate::command_builder::{
+    build_convert_plan, validate_existing_file, ConvertRequest,
+};
+use crate::downloader::{install_verified_ffmpeg_blocking, DownloadGuard};
+use crate::jobs::JobRegistry;
+use crate::process::{new_command, probe_version_line, resolve_binary};
+use crate::progress::{classify_log_level, parse_progress_line};
+use serde::Serialize;
+use std::collections::VecDeque;
+use std::fs;
+use std::io::Read;
+use std::process::Stdio;
+use std::sync::atomic::Ordering;
+use tauri::{AppHandle, Emitter, Manager, State};
 
-// Payload structs sent to JS
-
-#[derive(Serialize, Clone)]
-pub struct Capabilities {
+/// Returned by `get_capabilities`.
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilitiesPayload {
     pub has_ffmpeg: bool,
     pub has_ffprobe: bool,
     pub version: String,
+    pub ffmpeg_path: Option<String>,
+    pub ffprobe_path: Option<String>,
 }
 
-/// Emitted as `progress-update`
-#[derive(Serialize, Clone)]
-pub struct ProgressPayload {
-    pub job_id: String,
-    pub frame: u64,
-    pub fps: f32,
-    pub speed: f64,
-    pub size_kb: u64,
-    pub time_s: f64,
-    pub bitrate_kbps: f32,
-}
-
-/// Emitted as `log-update`
-#[derive(Serialize, Clone)]
+/// Emitted as `log-update` (informational only — NEVER a terminal job signal).
+#[derive(Debug, Clone, Serialize)]
 pub struct LogPayload {
     pub job_id: String,
     pub level: String,
     pub message: String,
 }
 
-/// Parameters passed from React via invoke('start_convert', {...})
-#[derive(Deserialize)]
-pub struct ConvertParams {
+/// Emitted as `job-finished` when a conversion terminates (success, failure, or cancellation).
+#[derive(Debug, Clone, Serialize)]
+pub struct JobFinishedEvent {
     pub job_id: String,
-    /// Absolute path to source file
-    pub input_path: String,
+    pub success: bool,
+    pub cancelled: bool,
+    pub exit_code: Option<i32>,
     pub output_path: String,
-    pub args: Vec<String>,
+    pub error: Option<String>,
 }
 
-
+/// Inspects available FFmpeg and FFprobe binaries using the exact same resolver
+/// as `start_convert` and `probe_file` (`<app_data_dir>/bin` first, then `PATH`).
 #[tauri::command]
-pub fn get_capabilities() -> Result<Capabilities, String> {
-    let ffmpeg_version = Command::new("ffmpeg")
-        .arg("-version")
-        .output()
-        .map(|out| {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                s.lines().next().unwrap_or("unknown").to_string()
-            } else {
-                "Not found".to_string()
+pub async fn get_capabilities(app: AppHandle) -> Result<CapabilitiesPayload, String> {
+    tokio::task::spawn_blocking(move || {
+        let ffmpeg_bin = resolve_binary(&app, "ffmpeg");
+        let (has_ffmpeg, version, ffmpeg_path) = match ffmpeg_bin {
+            Some(ref path) => match probe_version_line(path) {
+                Some(ver) => (true, ver, Some(path.to_string_lossy().into_owned())),
+                None => (false, "Not found".to_string(), None),
+            },
+            None => (false, "Not found".to_string(), None),
+        };
+
+        let ffprobe_bin = resolve_binary(&app, "ffprobe");
+        let (has_ffprobe, ffprobe_path) = match ffprobe_bin {
+            Some(ref path) if probe_version_line(path).is_some() => {
+                (true, Some(path.to_string_lossy().into_owned()))
             }
+            _ => (false, None),
+        };
+
+        Ok(CapabilitiesPayload {
+            has_ffmpeg,
+            has_ffprobe,
+            version,
+            ffmpeg_path,
+            ffprobe_path,
         })
-        .unwrap_or_else(|_| "Not found".to_string());
-
-    let has_ffmpeg_system = !ffmpeg_version.contains("Not found");
-
-    let (has_ffmpeg, version) = if has_ffmpeg_system {
-        (true, ffmpeg_version)
-    } else {
-        match ffmpeg_sidecar::command::FfmpegCommand::new()
-            .args(["-version"])
-            .spawn()
-        {
-            Ok(mut child) => {
-                match child.take_stdout() {
-                    Some(mut stdout) => {
-                        use std::io::Read;
-                        let mut s = String::new();
-                        let _ = stdout.read_to_string(&mut s);
-                        let ver = s.lines().next().unwrap_or("ffmpeg (sidecar)").to_string();
-                        let _ = child.as_inner_mut().wait();
-                        (true, ver)
-                    }
-                    None => (false, "Not found".to_string()),
-                }
-            }
-            Err(_) => (false, "Not found".to_string()),
-        }
-    };
-
-    let has_ffprobe = Command::new(ffmpeg_sidecar::ffprobe::ffprobe_path())
-        .arg("-version")
-        .output()
-        .map(|out| out.status.success())
-        .unwrap_or(false);
-
-    Ok(Capabilities {
-        has_ffmpeg,
-        has_ffprobe,
-        version,
     })
+    .await
+    .map_err(|e| format!("Failed to inspect FFmpeg capabilities: {e}"))?
 }
 
+/// Validates a real local file and dynamically grants per-file access on Tauri's
+/// `asset://` protocol scope (replacing wildcard `["**"]`).
 #[tauri::command]
-pub fn probe_file(path: String) -> Result<String, String> {
-    let output = Command::new(ffmpeg_sidecar::ffprobe::ffprobe_path())
-        .args([
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            &path,
-        ])
-        .output()
-        .map_err(|e| format!("ffprobe failed to spawn: {}", e))?;
+pub async fn allow_asset_file(app: AppHandle, path: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let canonical = validate_existing_file(&path, "path")?;
+        app.asset_protocol_scope()
+            .allow_file(&canonical)
+            .map_err(|e| format!("Failed to grant asset scope for file: {e}"))?;
+        Ok(canonical.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("Failed to register asset file: {e}"))?
+}
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+/// Validates a local media file, grants per-file `asset://` preview access, and runs `ffprobe`
+/// safely with `-protocol_whitelist file` and `--` delimiter.
+#[tauri::command]
+pub async fn probe_file(app: AppHandle, path: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let canonical = validate_existing_file(&path, "path")?;
+        app.asset_protocol_scope()
+            .allow_file(&canonical)
+            .map_err(|e| format!("Failed to grant asset scope for probed file: {e}"))?;
+
+        let ffprobe_bin = resolve_binary(&app, "ffprobe").ok_or_else(|| {
+            "ffprobe binary not found in app data directory or system PATH".to_string()
+        })?;
+
+        let canonical_str = canonical.to_string_lossy().into_owned();
+        let output = new_command(&ffprobe_bin)
+            .args([
+                "-v",
+                "quiet",
+                "-protocol_whitelist",
+                "file",
+                "-print_format",
+                "json",
+                "-show_format",
+                "-show_streams",
+                "--",
+                &canonical_str,
+            ])
+            .output()
+            .map_err(|e| format!("ffprobe failed to spawn: {e}"))?;
+
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            if stderr.is_empty() {
+                Err(format!(
+                    "ffprobe exited with status {}",
+                    output.status.code().unwrap_or(-1)
+                ))
+            } else {
+                Err(stderr)
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("ffprobe worker task failed: {e}"))?
+}
+
+/// Validates `request`, constructs a safe FFmpeg command in Rust, spawns FFmpeg on a blocking
+/// thread with `CREATE_NO_WINDOW`, streams live `progress-update` and `log-update` events,
+/// always reaps the child process with `wait()`, emits `job-finished`, and returns `Err` on
+/// failure or cancellation.
+#[tauri::command]
+pub async fn start_convert(
+    app: AppHandle,
+    request: ConvertRequest,
+) -> Result<JobFinishedEvent, String> {
+    tokio::task::spawn_blocking(move || run_convert_blocking(&app, &request))
+        .await
+        .map_err(|e| format!("Conversion worker panicked or was aborted: {e}"))?
+}
+
+fn run_convert_blocking(
+    app: &AppHandle,
+    request: &ConvertRequest,
+) -> Result<JobFinishedEvent, String> {
+    let plan = build_convert_plan(request)?;
+    let job_id = request.job_id.clone();
+    let output_path_str = plan.output_path.to_string_lossy().into_owned();
+
+    let ffmpeg_bin = resolve_binary(app, "ffmpeg").ok_or_else(|| {
+        "FFmpeg binary not found. Download FFmpeg Core or install it on your system PATH."
+            .to_string()
+    })?;
+
+    let registry = app.state::<JobRegistry>();
+    if registry.contains(&job_id) {
+        return Err(format!("Job '{job_id}' is already running"));
     }
-}
-
-#[tauri::command]
-pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<String, String> {
-    use ffmpeg_sidecar::command::FfmpegCommand;
-    use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
-
-    let job_id = params.job_id.clone();
 
     let _ = app.emit(
         "log-update",
@@ -131,142 +178,203 @@ pub async fn start_convert(app: AppHandle, params: ConvertParams) -> Result<Stri
             job_id: job_id.clone(),
             level: "started".into(),
             message: format!(
-                "Starting encode: {} → {}",
-                params.input_path, params.output_path
+                "Starting encode: {} -> {}",
+                plan.input_path.display(),
+                plan.output_path.display()
             ),
         },
     );
 
-    let mut child = FfmpegCommand::new()
-        .args(&params.args)
+    let mut child = new_command(&ffmpeg_bin)
+        .args(&plan.args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
+        .map_err(|e| format!("Failed to spawn ffmpeg: {e}"))?;
 
-    let job_id_clone = job_id.clone();
-    let app_clone = app.clone();
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture ffmpeg stderr stream".to_string())?;
 
-    let iter = child
-        .iter()
-        .map_err(|e| format!("Failed to create ffmpeg iterator: {}", e))?;
+    let handles = registry.register(job_id.clone(), child)?;
 
-    let mut done_emitted = false;
+    // Drain stderr splitting on BOTH `\r` and `\n` so live FFmpeg progress updates flush immediately.
+    let mut recent_errors: VecDeque<String> = VecDeque::with_capacity(24);
+    drain_ffmpeg_stderr(stderr, app, &job_id, &mut recent_errors);
 
-    for event in iter {
-        match event {
-            FfmpegEvent::Progress(progress) => {
-                let _ = app_clone.emit(
-                    "progress-update",
-                    ProgressPayload {
-                        job_id: job_id_clone.clone(),
-                        frame: progress.frame as u64,
-                        fps: progress.fps,
-                        speed: progress.speed as f64,
-                        size_kb: progress.size_kb as u64,
-                        time_s: {
-                            let t = &progress.time;
-                            let parts: Vec<&str> = t.split(':').collect();
-                            if parts.len() == 3 {
-                                let h: f64 = parts[0].parse().unwrap_or(0.0);
-                                let m: f64 = parts[1].parse().unwrap_or(0.0);
-                                let s: f64 = parts[2].parse().unwrap_or(0.0);
-                                h * 3600.0 + m * 60.0 + s
-                            } else {
-                                0.0
-                            }
-                        },
-                        bitrate_kbps: progress.bitrate_kbps,
-                    },
-                );
-            }
+    // Always remove from registry and reap child with `.wait()` (no zombies).
+    let _ = registry.remove(&job_id);
+    let maybe_child = handles
+        .child
+        .lock()
+        .map_err(|_| "Child process lock poisoned".to_string())?
+        .take();
 
-            FfmpegEvent::Log(LogLevel::Info, msg) => {
-                let _ = app_clone.emit(
-                    "log-update",
-                    LogPayload {
-                        job_id: job_id_clone.clone(),
-                        level: "info".into(),
-                        message: msg.clone(),
-                    },
-                );
-            }
+    let status = match maybe_child {
+        Some(mut c) => Some(
+            c.wait()
+                .map_err(|e| format!("Failed to wait for ffmpeg process: {e}"))?,
+        ),
+        None => None,
+    };
 
-            FfmpegEvent::Log(LogLevel::Warning, msg) => {
-                let _ = app_clone.emit(
-                    "log-update",
-                    LogPayload {
-                        job_id: job_id_clone.clone(),
-                        level: "warning".into(),
-                        message: msg.clone(),
-                    },
-                );
-            }
+    let was_cancelled = handles.cancelled.load(Ordering::SeqCst);
+    let exit_code = status.and_then(|s| s.code());
+    let success = !was_cancelled && status.map(|s| s.success()).unwrap_or(false);
 
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, msg) => {
-                let _ = app_clone.emit(
-                    "log-update",
-                    LogPayload {
-                        job_id: job_id_clone.clone(),
-                        level: "error".into(),
-                        message: msg.clone(),
-                    },
-                );
-            }
-
-            FfmpegEvent::Done => {
-                done_emitted = true;
-                let _ = app_clone.emit(
-                    "log-update",
-                    LogPayload {
-                        job_id: job_id_clone.clone(),
-                        level: "done".into(),
-                        message: format!("✅ Encode complete → {}", params.output_path),
-                    },
-                );
-                break;
-            }
-
-            _ => {}
-        }
+    if was_cancelled {
+        // Best-effort cleanup of incomplete cancelled output file
+        let _ = fs::remove_file(&plan.output_path);
     }
 
-    if !done_emitted {
-        let status = child
-            .as_inner_mut()
-            .wait()
-            .map_err(|e| format!("Failed to wait for ffmpeg: {}", e))?;
-
-        if status.success() {
-            let _ = app_clone.emit(
-                "log-update",
-                LogPayload {
-                    job_id: job_id_clone.clone(),
-                    level: "done".into(),
-                    message: format!("✅ Encode complete → {}", params.output_path),
-                },
-            );
+    let error_msg = if success {
+        None
+    } else if was_cancelled {
+        Some("Conversion cancelled by user".to_string())
+    } else {
+        let tail = recent_errors
+            .iter()
+            .rev()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join(" | ");
+        if tail.is_empty() {
+            Some(format!(
+                "FFmpeg failed with exit code {}",
+                exit_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "unknown".into())
+            ))
         } else {
-            let _ = app_clone.emit(
+            Some(format!(
+                "FFmpeg failed (exit {}): {tail}",
+                exit_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "unknown".into())
+            ))
+        }
+    };
+
+    let finished = JobFinishedEvent {
+        job_id: job_id.clone(),
+        success,
+        cancelled: was_cancelled,
+        exit_code,
+        output_path: output_path_str.clone(),
+        error: error_msg.clone(),
+    };
+
+    let _ = app.emit(
+        "log-update",
+        LogPayload {
+            job_id: job_id.clone(),
+            level: if success {
+                "done".into()
+            } else if was_cancelled {
+                "warning".into()
+            } else {
+                "error".into()
+            },
+            message: if success {
+                format!("Encode complete -> {output_path_str}")
+            } else if was_cancelled {
+                "Encode cancelled by user".into()
+            } else {
+                error_msg
+                    .clone()
+                    .unwrap_or_else(|| "Encode failed".to_string())
+            },
+        },
+    );
+
+    let _ = app.emit("job-finished", finished.clone());
+
+    if success {
+        Ok(finished)
+    } else {
+        Err(error_msg.unwrap_or_else(|| "Conversion failed".to_string()))
+    }
+}
+
+fn drain_ffmpeg_stderr<R: Read>(
+    mut reader: R,
+    app: &AppHandle,
+    job_id: &str,
+    recent_lines: &mut VecDeque<String>,
+) {
+    const MAX_LINE_BYTES: usize = 8192;
+    let mut chunk = [0u8; 4096];
+    let mut line_buf: Vec<u8> = Vec::with_capacity(512);
+
+    let mut flush_line = |buf: &mut Vec<u8>| {
+        if buf.is_empty() {
+            return;
+        }
+        let line = String::from_utf8_lossy(buf).trim().to_string();
+        buf.clear();
+        if line.is_empty() {
+            return;
+        }
+        if let Some(progress) = parse_progress_line(&line, job_id) {
+            let _ = app.emit("progress-update", progress);
+        } else {
+            let level = classify_log_level(&line);
+            if recent_lines.len() >= 20 {
+                recent_lines.pop_front();
+            }
+            recent_lines.push_back(line.clone());
+            let _ = app.emit(
                 "log-update",
                 LogPayload {
-                    job_id: job_id_clone.clone(),
-                    level: "error".into(),
-                    message: format!("❌ Encode failed with status: {}", status),
+                    job_id: job_id.to_string(),
+                    level: level.to_string(),
+                    message: line,
                 },
             );
         }
+    };
+
+    loop {
+        match reader.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                for &b in &chunk[..n] {
+                    if b == b'\r' || b == b'\n' {
+                        flush_line(&mut line_buf);
+                    } else if line_buf.len() < MAX_LINE_BYTES {
+                        line_buf.push(b);
+                    }
+                }
+            }
+            Err(_) => break,
+        }
     }
-
-    Ok(job_id.clone())
+    flush_line(&mut line_buf);
 }
 
+/// Terminates the active FFmpeg process for `job_id` immediately and marks it cancelled.
+/// Returns `true` if an active job with `job_id` was found and terminated.
 #[tauri::command]
-pub fn cancel_job(_job_id: String) -> Result<(), String> {
-    Ok(())
+pub fn cancel_job(registry: State<'_, JobRegistry>, job_id: String) -> Result<bool, String> {
+    Ok(registry.cancel(&job_id))
 }
 
+/// Downloads and verifies pinned FFmpeg & FFprobe binaries into `<app_data_dir>/bin/`.
+/// Protected against concurrent invocations by `DownloadGuard`.
 #[tauri::command]
-pub async fn download_ffmpeg() -> Result<String, String> {
-    ffmpeg_sidecar::download::auto_download()
-        .map_err(|e| format!("Failed to download FFmpeg: {}", e))?;
-    Ok("Embedded FFmpeg downloaded successfully".to_string())
+pub async fn download_ffmpeg(
+    app: AppHandle,
+    guard: State<'_, DownloadGuard>,
+) -> Result<String, String> {
+    let _lease = guard.try_acquire()?;
+    let app_clone = app.clone();
+    tokio::task::spawn_blocking(move || install_verified_ffmpeg_blocking(&app_clone))
+        .await
+        .map_err(|e| format!("FFmpeg download task failed: {e}"))?
 }

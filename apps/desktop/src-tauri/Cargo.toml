@@ -1,10 +1,10 @@
 [package]
-name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+name = "ffmpeg-ui-desktop"
+version = "2.0.0"
+description = "Cross-platform native desktop media converter powered by FFmpeg and Tauri v2"
+authors = ["Benny Pepper"]
+license = "MIT"
+repository = "https://github.com/bennypepper/FFmpeg-UI"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -21,9 +21,13 @@ tauri-build = { version = "2.5.6", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+sha2 = "0.10"
+hex = "0.4"
+ureq = "3"
 tauri = { version = "2.10.3", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-log = "2"
-ffmpeg-sidecar = "2.0.0"
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
