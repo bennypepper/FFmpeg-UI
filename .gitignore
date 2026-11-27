@@ -6,24 +6,42 @@ yarn-error.log*
 pnpm-debug.log*
 .pnpm-store
 
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
 # Python (Local Server)
 __pycache__/
 *.py[cod]
 *.pyo
 venv/
-.env
+.venv/
+apps/local-server/__pycache__/
+apps/local-server/.venv/
+.pytest_cache/
+.ruff_cache/
 
 # Turborepo
 .turbo/
 turbo*.log
 
-# Build Outputs (Web/React/Vite)
+# Build Outputs & TypeScript Incremental Caches
 dist/
 dist-ssr/
 build/
 .next/
 out/
 coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Generated WASM Core Assets (copied from @ffmpeg/core on predev/prebuild)
+apps/wasm-web/public/ffmpeg/
 
 # Tauri/Rust
 src-tauri/target/
@@ -34,15 +52,19 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 
-# FFmpeg Temporary Files
+# FFmpeg Temporary & Runtime User Files
 uploads/
 outputs/
+apps/local-server/uploads/*
+!apps/local-server/uploads/.gitkeep
+apps/local-server/outputs/*
+!apps/local-server/outputs/.gitkeep
 ffmpeg2pass-0.log
 ffmpeg2pass-0.log.mbtree
 palette_*.png
 *.zip
 
-# Ide/Editor
+# IDE / Editor
 .vscode/
 .idea/
 *.suo

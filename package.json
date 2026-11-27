@@ -2,21 +2,22 @@
   "name": "ffmpeg-ui-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@11.11.1",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "turbo run format"
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
   },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "devDependencies": {
-    "turbo": "^1.13.0"
-  },
-  "dependencies": {
-    "@tauri-apps/api": "^2.10.1",
-    "lucide-react": "^1.8.0"
+    "turbo": "^2.11.13"
   }
 }

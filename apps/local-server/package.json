@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "start": "python server.py",
-    "build": "echo 'No build step'"
+    "build": "node -e \"console.log('Python backend - no JS build step')\""
   }
 }

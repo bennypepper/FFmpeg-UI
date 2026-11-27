@@ -1,15 +1,32 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!-node_modules"]
+      "outputs": ["dist/**"]
+    },
+    "@ffmpeg-ui/core#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@ffmpeg-ui/ui#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "local-server#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
     },
     "lint": {},
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
-    },
-    "format": {}
+    }
   }
 }
