@@ -1,6 +1,6 @@
 # FFmpeg UI — WebAssembly
 
-> **FFmpeg running entirely inside your browser tab.** No server. No upload. Your files never leave your device.
+> **FFmpeg 5.1.4 running entirely inside your browser tab.** No server. No upload. Your files never leave your device.
 
 🌐 **Live:** [ffmpeg-ui.vercel.app](https://ffmpeg-ui.vercel.app)
 
@@ -8,220 +8,91 @@
 
 ## What Is This?
 
-This is the browser-native deployment of FFmpeg UI. It uses [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) — FFmpeg compiled to WebAssembly — to process media files **client-side**, inside a Web Worker thread, with zero server involvement.
+This is the browser-native deployment of FFmpeg UI. It uses [`@ffmpeg/ffmpeg`](https://github.com/ffmpegwasm/ffmpeg.wasm) with single-threaded [`@ffmpeg/core@0.12.6`](https://www.npmjs.com/package/@ffmpeg/core) (**FFmpeg 5.1.4**) to process media files **client-side**, inside a Web Worker thread, with zero server involvement.
 
-**What you can do:**
-- Convert between video and audio formats (MP4, WebM, MKV, MOV, MP3, AAC, OGG, FLAC, WAV…)
-- Remux containers without re-encoding
-- Extract thumbnail images
-- Merge/concatenate files
-- Apply quick presets (TikTok/IG, YouTube, Discord <8MB, Archival MKV)
-- Process batch queues of multiple files
+### Supported Capabilities (WASM Sandbox)
+
+| Capability | Supported in Browser WASM |
+|---|---|
+| **Modes** | `convert`, `audio`, `remux`, `thumbnail` (JPG/PNG/WebP), `gif` (palettegen/paletteuse) |
+| **Video Containers** | MP4, MKV, AVI, MOV, GIF |
+| **Video Codecs** | H.264 (`libx264`), ProRes (`prores_ks`), Stream Copy (`copy`) |
+| **Audio Containers** | MP3, M4A, OGG, WAV, FLAC |
+| **Audio Codecs** | AAC (`aac`), MP3 (`libmp3lame`), Opus (`libopus`), FLAC (`flac`), PCM WAV (`pcm_s16le`), Stream Copy (`copy`) |
+| **Batch Queue** | Per-file independent format & encoding settings (`Convert Selected` / `Convert All`) |
+
+**Gated to Desktop / Local Server:** `libx265` (deadlocks single-threaded WASM), `libvpx-vp9` / WebM encoding (WASM OOB trap), CUDA / Intel QSV hardware acceleration, and multi-file `merge`.
 
 ---
 
 ## How It Works
 
-```
+```text
 Browser Tab
-│
-├── Main Thread (React UI)
-│   ├── App.tsx              ← UI shell, convert pipeline, file handling
-│   ├── useFFmpeg.ts         ← FFmpeg lifecycle hook (load state machine, exec, cancel)
-│   ├── @ffmpeg-ui/ui        ← shared React component library
-│   └── @ffmpeg-ui/core      ← FFmpeg command builder (buildFFmpegArgs)
+├── Main Thread (React 19 UI)
+│   ├── src/App.tsx            ← UI shell, validated job planning, file probing & downloads
+│   ├── src/useFFmpeg.ts       ← Single-fetch WASM worker lifecycle, MEMFS cleanup, crash recycling
+│   ├── @ffmpeg-ui/ui          ← Shared React component library (MediaEditor, SettingsModal, AboutModal)
+│   └── @ffmpeg-ui/core        ← Validated FFmpeg planner (planFFmpegJob, platform capabilities)
 │
 └── Web Worker Thread (spawned by @ffmpeg/ffmpeg)
-    ├── worker-[hash].js     ← Vite-bundled orchestration worker (IIFE)
-    │   └── importScripts() or import() → ffmpeg-core.js
-    │
-    └── /public/ffmpeg/
-        ├── ffmpeg-core.js   ← Emscripten-compiled FFmpeg JS (~300 KB)
-        └── ffmpeg-core.wasm ← FFmpeg compiled to WASM (~30 MB)
+    └── /public/ffmpeg/ (copied on predev/prebuild from @ffmpeg/core)
+        ├── ffmpeg-core.js     ← Emscripten-compiled FFmpeg 5.1.4 JS (~115 KB)
+        └── ffmpeg-core.wasm   ← Single-threaded FFmpeg 5.1.4 WASM binary (~32 MB)
 ```
 
-### Load Sequence
+### Load & Conversion Lifecycle
 
-When the page opens, `useFFmpeg` runs automatically:
+1. **Asset Provisioning (`predev` / `prebuild`)**: `scripts/copy-ffmpeg-core.mjs` copies `ffmpeg-core.js` and `ffmpeg-core.wasm` from `node_modules/@ffmpeg/core/dist/esm` into `public/ffmpeg/` automatically before `dev` and `build` (these large build artifacts are not tracked in git).
+2. **Single-Fetch Load**: `useFFmpeg` calls `ffmpeg.load()` directly with same-origin `/ffmpeg/ffmpeg-core.js` and `/ffmpeg/ffmpeg-core.wasm` paths (no `toBlobURL()` wrapper and no redundant double-fetch preloader).
+3. **Isolated Per-Job Execution**: Each job validates options through `planFFmpegJob(..., 'wasm')`, writes to a unique safe MEMFS input name (`in_<jobId>.<ext>`), encodes to `out_<jobId>.<ext>`, checks `exitCode !== 0`, streams the output `Blob` without extra RAM copies, and removes both MEMFS files in `finally`.
+4. **Automatic Worker Recovery**: If FFmpeg exits non-zero or triggers a WebAssembly `RuntimeError` trap, `useFFmpeg` surfaces stderr details in the UI error banner and recycles the Web Worker so subsequent jobs start on a clean Emscripten heap.
 
-1. **Download** — `ffmpeg-core.wasm` (~30 MB) is streamed from `/ffmpeg/ffmpeg-core.wasm` (same-origin) with live progress tracking
-2. **Initialize** — `ffmpeg.load()` is called with the direct same-origin paths — **no `toBlobURL()` wrapping**
-3. **Worker spawned** — `@ffmpeg/ffmpeg` creates a `{ type: "module" }` Web Worker from Vite's bundled `worker.js`
-4. **Core compiled** — the worker imports `ffmpeg-core.js`, which loads the WASM binary and compiles it via `WebAssembly.instantiateStreaming()`
-5. **Ready** — titlebar shows 🟢 Ready, Convert button activates
+### Security & Isolation Headers
 
-The UI shows a yellow progress banner with percentage during load. The terminal panel logs each step.
+`vercel.json` and `vite.config.ts` configure `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`, `Cross-Origin-Resource-Policy: cross-origin`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, and a strict `Content-Security-Policy` allowing `'wasm-unsafe-eval'` and `blob:` workers/media.
 
-### Convert Sequence
-
-When the user clicks Convert:
-
-```
-User clicks Convert
-→ handleExecute() in App.tsx
-→ useFFmpeg.exec(args, inputFile, outputName)
-  → ffmpeg.writeFile(inputName, fileBytes)   // writes to in-memory WASM filesystem
-  → ffmpeg.exec([...ffmpegArgs])             // runs FFmpeg inside the worker
-     ← ffmpeg 'log' events → terminal panel
-     ← ffmpeg 'progress' events → progress bar
-  → ffmpeg.readFile(outputName)              // reads result from WASM filesystem
-  → returns Blob
-→ Blob → createObjectURL → <a>.click()    // triggers browser download
-```
-
-### Why Local `/public/ffmpeg/` Files?
-
-Early versions fetched `ffmpeg-core.js` from unpkg CDN and wrapped it in `toBlobURL()`. A regression later re-introduced `toBlobURL()` even for the local `/public/ffmpeg/` files. Both cases caused `ReferenceError: WebAssembly is not defined` because:
-
-- Vite bundles the `@ffmpeg/ffmpeg` worker as an **IIFE** chunk, which runs inside a `{ type: "module" }` Web Worker
-- In module workers, `importScripts()` is unavailable, so the worker falls through to `dynamic import()`
-- The ESM `ffmpeg-core.js`, when dynamically imported from a `blob:` URL inside this IIFE-in-module-worker context, loses its proper global scope
-- Emscripten's startup check `typeof WebAssembly !== "object"` fails and throws
-
-**The fix:** pass the same-origin `/public/ffmpeg/` paths **directly** to `ffmpeg.load()` — no `toBlobURL()` wrapping at all. The `useFFmpeg` hook enforces this rule permanently:
-
-```ts
-// ✅ Correct — same-origin paths passed directly
-await ffmpeg.load({
-  coreURL:  '/ffmpeg/ffmpeg-core.js',
-  wasmURL:  '/ffmpeg/ffmpeg-core.wasm',
-});
-
-// ❌ Never do this — blob: URL breaks WebAssembly global scope in the worker
-// const coreURL = await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript');
-```
-
-### Cross-Origin Isolation (COEP/COOP)
-
-FFmpeg WASM requires `SharedArrayBuffer`, which browsers only allow in **cross-origin isolated** contexts. The `vercel.json` in this directory sets the required HTTP headers on every response:
-
-```json
-{
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "require-corp",
-  "Cross-Origin-Resource-Policy": "cross-origin"
-}
-```
-
-You can verify isolation is active in the browser console:
-```js
-self.crossOriginIsolated // must be true
-```
-
----
-
-## Directory Structure
-
-```
-apps/wasm-web/
-│
-├── public/
-│   ├── ffmpeg/
-│   │   ├── ffmpeg-core.js     # Emscripten-compiled FFmpeg (~300 KB) — @ffmpeg/core@0.12.6 ESM
-│   │   └── ffmpeg-core.wasm   # FFmpeg WASM binary (~30 MB)
-│   ├── favicon.svg
-│   └── icons.svg
-│
-├── src/
-│   ├── App.tsx                # UI shell — convert pipeline, file handling, rendering
-│   ├── useFFmpeg.ts           # Custom hook — FFmpeg lifecycle state machine (idle→downloading→initializing→ready|error)
-│   ├── App.css                # App-level styles
-│   ├── index.css              # Global CSS variables and resets
-│   └── main.tsx               # React entry point
-│
-├── vite.config.ts             # COEP headers (dev) + optimizeDeps.exclude for @ffmpeg/*
-├── vercel.json                # COEP/COOP headers for production (Vercel)
-├── tsconfig.app.json
-└── package.json
-```
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/App.tsx` | UI shell: file handling, convert pipeline, rendering. Consumes `useFFmpeg`. |
-| `src/useFFmpeg.ts` | FFmpeg lifecycle hook: `idle → downloading → initializing → ready / error` state machine, progress tracking, exec, cancel/retry. Single source of truth for all FFmpeg state. |
-| `public/ffmpeg/ffmpeg-core.js` | The actual FFmpeg binary compiled to JavaScript via Emscripten. Do **not** edit. Regenerated by updating `@ffmpeg/core`. |
-| `public/ffmpeg/ffmpeg-core.wasm` | The WebAssembly binary. ~30 MB. Loaded once per session, cached by the browser. |
-| `vite.config.ts` | Sets COEP headers for dev server; excludes `@ffmpeg/ffmpeg` and `@ffmpeg/util` from Vite's pre-bundler |
-| `vercel.json` | Production COEP/COOP/CORP headers — **required** for SharedArrayBuffer and WASM to work |
-
----
-
-## Shared Packages Used
-
-| Package | Role |
-|---------|------|
-| `@ffmpeg-ui/ui` | All React components — `MediaEditor`, `DropZone`, `BatchQueue`, `TerminalOutput`, `SettingsPanel`, presets |
-| `@ffmpeg-ui/core` | `buildFFmpegArgs()` — converts UI options into an FFmpeg argument array |
-| `@ffmpeg/ffmpeg` | JS wrapper around the WASM worker — `FFmpeg` class, `ffmpeg.load()`, `ffmpeg.exec()` |
-| `@ffmpeg/util` | `fetchFile()` — reads a `File` object into a `Uint8Array` for writing to the WASM filesystem |
+> Note: Single-threaded `@ffmpeg/core@0.12.6` does not require `SharedArrayBuffer`, so it remains functional even in browsers without cross-origin isolation, while COOP/COEP headers keep the page isolated and ready for future multi-threaded builds.
 
 ---
 
 ## Local Development
 
+Requires **Node.js 20.19+ / 22+**.
+
 ```bash
 # From monorepo root
 npm install
 
-# Start WASM dev server (with COEP headers)
-cd apps/wasm-web
-npm run dev
+# Start WASM dev server (predev automatically copies @ffmpeg/core assets)
+npm run dev --workspace=wasm-web
+
+# Typecheck, lint, and production build
+npm run typecheck --workspace=wasm-web
+npm run lint --workspace=wasm-web
+npm run build --workspace=wasm-web
+
+# Preview production build with full security & isolation headers
+npm run preview --workspace=wasm-web
 ```
-
-Open `http://localhost:5173`. The WASM core loads from `/ffmpeg/ffmpeg-core.wasm` (~30 MB) on first load. Subsequent visits use the browser cache.
-
-> **Important:** The dev server sets COEP headers via `vite.config.ts`. Without these headers, `SharedArrayBuffer` is unavailable and `ffmpeg.load()` will fail silently.
-
-### Updating the Core Version
-
-If you need to update `@ffmpeg/core`:
-
-```bash
-# 1. Update the package
-npm install @ffmpeg/core@<version> -D
-
-# 2. Re-copy the built files to public/
-cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js apps/wasm-web/public/ffmpeg/
-cp node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm apps/wasm-web/public/ffmpeg/
-
-# 3. No code change required — the paths in useFFmpeg.ts are version-agnostic
-```
-
-> ⚠️ `@ffmpeg/core` is in root `node_modules` (hoisted by npm workspaces). Run the copy from the repo root.
-
-### Build for Production
-
-```bash
-npm run build
-# Output: dist/
-```
-
-Vercel automatically builds on push to `main` using the `vercel.json` configuration in this directory.
 
 ---
 
 ## Tech Stack
 
 | Tool | Version | Purpose |
-|------|---------|---------|
+|---|---|---|
 | React | 19 | UI framework |
 | Vite | 8 | Dev server and bundler |
-| TypeScript | 6 | Type safety |
-| `@ffmpeg/ffmpeg` | 0.12.15 | Worker and message protocol |
-| `@ffmpeg/core` | 0.12.6 | FFmpeg compiled to WASM |
-| `@ffmpeg/util` | 0.12.2 | File and blob helpers |
+| TypeScript | 5.9 | Strict type checking (`strict: true`) |
+| `@ffmpeg/ffmpeg` | 0.12.15 | Web Worker orchestration |
+| `@ffmpeg/core` | 0.12.6 | Single-threaded FFmpeg 5.1.4 WASM core |
+| `@ffmpeg/util` | 0.12.2 | Browser `File` → `Uint8Array` helper |
 
 ---
 
 ## Known Constraints
 
-| Constraint | Details |
-|------------|---------|
-| **First load ~30 MB** | The WASM binary downloads once per browser cache. Subsequent visits are instant. |
-| **Single-threaded** | Uses `@ffmpeg/core` (not `@ffmpeg/core-mt`). No `SharedArrayBuffer` multi-threading. Processing is slower than native FFmpeg. |
-| **No hardware acceleration** | WASM runs on CPU only. |
-| **File size limits** | Browser memory limits apply. Large files (>500 MB) may cause tab crashes. |
-| **Cross-origin isolation required** | COEP headers must be set on the server. Without them, the app won't load in production. |
-| **Firefox module worker support** | Requires Firefox 114+. Older Firefox doesn't support `{ type: "module" }` workers. |
+- **First load (~32 MB)**: `ffmpeg-core.wasm` downloads once and is cached by the browser (`Cache-Control` configured in `vercel.json`).
+- **Single-threaded CPU**: Conversions run on a single Web Worker CPU thread without GPU hardware acceleration.
+- **Browser RAM limits**: Files are loaded into Emscripten MEMFS in tab memory; files over **500 MB** trigger a warning and are better handled by the Native Desktop App.
