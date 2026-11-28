@@ -885,17 +885,30 @@ export function SettingsModal({
                 </label>
               </div>
             </div>
-            <div style={{ marginTop: 10 }}>
-              <FieldLabel htmlFor={fieldId('custom')}>Custom FFmpeg Arguments</FieldLabel>
-              <input
-                id={fieldId('custom')}
-                type="text"
-                value={options.custom || ''}
-                onChange={e => update({ custom: e.target.value })}
-                placeholder="e.g. -bufsize 2M"
-                style={{ width: '100%', padding: '5px 9px', fontSize: '.76rem' }}
-              />
-            </div>
+            {platform === 'wasm' ? (
+              <div style={{ marginTop: 10 }}>
+                <FieldLabel htmlFor={fieldId('custom')}>Custom FFmpeg Arguments</FieldLabel>
+                <input
+                  id={fieldId('custom')}
+                  type="text"
+                  value={options.custom || ''}
+                  onChange={e => update({ custom: e.target.value })}
+                  placeholder="e.g. -bufsize 2M"
+                  style={{ width: '100%', padding: '5px 9px', fontSize: '.76rem' }}
+                />
+              </div>
+            ) : (
+              <p
+                style={{
+                  margin: '10px 0 0',
+                  fontSize: '.70rem',
+                  lineHeight: 1.45,
+                  color: 'var(--text-2)',
+                }}
+              >
+                Custom raw CLI arguments are disabled on Desktop and Local Server to prevent command injection.
+              </p>
+            )}
           </AccordionSection>
         </div>
 
